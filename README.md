@@ -24,7 +24,7 @@ Grade 12 STEM capstone, team 12322, Egypt, 2026-2027.
 The server folder has two tools:
 
 - **Logger** (`server/logger.py`): subscribes to every node topic and saves each valid reading to CSV.
-- **Fake publisher** (`server/fake_publisher.py`): pretends to be nodes N1, N2 and N3 and publishes readings that follow the MQTT contract. Use it to work on the logger, dashboard and ML pipeline before the hardware is ready.
+- **Fake publisher** (`server/fake_publisher.py`): pretends to be nodes N1, N2 and N3 and publishes readings that follow the [MQTT contract](docs/contract.md). Use it to work on the logger, dashboard and ML pipeline before the hardware is ready.
 
 Run every command from the repo root.
 
@@ -124,7 +124,7 @@ ble = pd.read_csv("data/raw/2026-09-27-fake-test/ble.csv")
 
 ### What the logger rejects
 
-Every message is checked against the MQTT contract in `server/contract.py`. A message that fails is counted and its reason is printed once, but it is never written to disk. The logger rejects:
+Every message is checked against the [MQTT contract](docs/contract.md) by `server/contract.py`. A message that fails is counted and its reason is printed once, but it is never written to disk. The logger rejects:
 
 - topics other than `invigil/node/{N1|N2|N3}/{ble|spectrum|status}`, or a `node` field that does not match the topic
 - missing or extra fields
