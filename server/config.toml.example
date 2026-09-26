@@ -1,0 +1,15 @@
+# Copy this file to server/config.toml and fill it in.
+# server/config.toml is gitignored. Never commit real values.
+
+[mqtt]
+host = "localhost"
+port = 1883
+# Leave both empty if the broker allows anonymous clients (local testing only).
+username = ""
+password = ""
+
+[privacy]
+# Salt for hashing BLE addresses. Must match the salt in the node firmware.
+# Use a long random string, for example the output of:
+#   python -c "import secrets; print(secrets.token_hex(16))"
+hash_salt = ""
