@@ -78,6 +78,8 @@ The unit connects to the laptop over Wi-Fi, so the broker must listen on the net
    mosquitto -c server/mosquitto.conf -v
    ```
 
+   The config opens two listeners: plain MQTT on port 1883 for the unit and the Python tools, and WebSockets on port 9001 for the [dashboard](../README.md#dashboard), because a browser cannot open a plain MQTT socket. The same login applies to both.
+
 3. Put the same username and password in `server/config.toml` and in the firmware secrets. Point the unit at the laptop's IP address (find it with `ipconfig`, or `ip addr` on Linux).
 4. If Windows Firewall asks, allow Mosquitto on private networks.
 5. Start the logger as above.
