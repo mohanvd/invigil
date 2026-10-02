@@ -263,9 +263,9 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 
 Team 12323, Alexandria STEM School, Egypt. Grade 12 capstone, 2026-2027.
 
-- Mohanad Tarek
 - Ahmed Khalifa
 - Ali Hamdeen
+- Mohanad Tarek
 
 ## Acknowledgements
 

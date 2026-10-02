@@ -9,14 +9,14 @@ abstract: >-
   a laptop, where a model reports the device type and the distance band.
   Grade 12 STEM capstone, team 12323.
 authors:
-  - given-names: Mohanad
-    family-names: Tarek
-    affiliation: Alexandria STEM School
   - given-names: Ahmed
     family-names: Khalifa
     affiliation: Alexandria STEM School
   - given-names: Ali
     family-names: Hamdeen
+    affiliation: Alexandria STEM School
+  - given-names: Mohanad
+    family-names: Tarek
     affiliation: Alexandria STEM School
 repository-code: "https://github.com/mohanvd/invigil"
 license: MIT
@@ -31,14 +31,14 @@ preferred-citation:
   type: software
   title: "Invigil: passive wireless detection of hidden cheating devices in exam halls"
   authors:
-    - given-names: Mohanad
-      family-names: Tarek
-      affiliation: Alexandria STEM School
     - given-names: Ahmed
       family-names: Khalifa
       affiliation: Alexandria STEM School
     - given-names: Ali
       family-names: Hamdeen
+      affiliation: Alexandria STEM School
+    - given-names: Mohanad
+      family-names: Tarek
       affiliation: Alexandria STEM School
   year: 2026
   institution:
