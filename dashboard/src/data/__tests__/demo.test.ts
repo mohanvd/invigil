@@ -77,6 +77,12 @@ describe("demo source", () => {
     expect(demoSessions()).toEqual(sessions)
 
     expect(results?.requirements.map((r) => r.id)).toEqual([1, 2, 3, 4, 5, 6])
+    // Demo never shows a measured value: every requirement stays pending.
+    expect(results?.sample).toBe(true)
+    for (const [i, result] of (results?.requirements ?? []).entries()) {
+      expect(result.value).toBeNull()
+      expect(requirementStatus(REQUIREMENTS[i], result.value)).toBe("pending")
+    }
     const labelled = new Set(sessions?.filter((s) => s.labelled).map((s) => s.name))
     for (const point of results?.rssiByDistance ?? []) expect(labelled.has(point.session)).toBe(true)
     expect(demoResults()).toEqual(results)

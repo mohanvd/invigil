@@ -51,7 +51,7 @@ What works today, on a laptop with no hardware:
 - **Logger** (`server/logger.py`): subscribes to the unit's topics, checks every message against the contract, and writes valid readings to CSV.
 - **Fake publisher** (`server/fake_publisher.py`): stands in for the unit and publishes readings in the right format. The numbers are placeholders, not physics.
 - **ML pipeline** (`ml/`): turns logged sessions into features, trains both models, and tests them on held-out sessions. It has only been run on synthetic data, which proves the code runs and nothing more.
-- **Dashboard** (`dashboard/`): the web app, with a Demo source that needs no broker and a Live source that reads Mosquitto over WebSockets. Alerts, sessions and results only exist in Demo so far. See [Dashboard](#dashboard).
+- **Dashboard** (`dashboard/`): the web app, with a Demo source that needs no broker and a Live source that reads Mosquitto over WebSockets. Alerts and sessions only exist in Demo so far, and no test results exist at all. See [Dashboard](#dashboard).
 - **Tests** for the contract, the logger, the fake publisher, the ML pipeline and the dashboard's data layer.
 
 Not started: the firmware and the digital twin.
@@ -160,7 +160,9 @@ The dashboard reads everything through one data interface with two sources. Pick
 - **Demo** (the default) makes mock readings in the browser. They follow the [MQTT contract](docs/contract.md) and use the same placeholder numbers as the fake publisher: the right shape, not the right physics. A "Demo data" badge stays in the top bar while Demo is active.
 - **Live** connects to Mosquitto with mqtt.js over WebSockets and subscribes to `invigil/node/+/+`.
 
-Detections (device type and distance band) are not published on MQTT yet. The topic is only a proposal at the end of the [MQTT contract](docs/contract.md). So in Live the hall map and the alerts list stay empty and say why, and Sessions and Results only fill in Demo until the server has an API for them.
+Detections (device type and distance band) are not published on MQTT yet. The topic is only a proposal at the end of the [MQTT contract](docs/contract.md). So in Live the hall map and the alerts list stay empty and say why, and Sessions only fills in Demo until the server has an API for it.
+
+Demo never shows a result. On the Results page every requirement is pending in both sources, and the confusion matrices and the RSSI chart in Demo are marked as sample data.
 
 ### Run it against the fake publisher
 

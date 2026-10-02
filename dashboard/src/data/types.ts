@@ -131,6 +131,8 @@ export interface RssiByDistancePoint {
 
 export interface ResultsReport {
   name: string
+  /** True when the figures are made-up samples that show the layout, not a test run. */
+  sample: boolean
   generatedAt: number
   requirements: RequirementResult[]
   typeMatrix: ConfusionMatrix<DeviceType>

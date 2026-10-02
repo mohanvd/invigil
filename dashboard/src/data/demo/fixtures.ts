@@ -1,6 +1,7 @@
-// Demo sessions and a demo results report. Both are generated from a fixed
+// Demo sessions and a sample results report. Both are generated from a fixed
 // seed, follow the naming and matrix in docs/data-protocol.md, and exist only
 // so the Sessions and Results pages can be checked before real data exists.
+// The report carries no requirement values: its matrices and chart are samples.
 
 import type {
   Band,
@@ -24,6 +25,7 @@ const TYPES: DeviceType[] = ["phone", "earpiece", "smartwatch", "allowed"]
 const BAND_ORDER: Band[] = ["near", "mid", "far"]
 const FIRST_DAY = Date.UTC(2026, 8, 21, 7, 30)
 const UNLABELLED = 4
+const REQUIREMENT_IDS: RequirementResult["id"][] = [1, 2, 3, 4, 5, 6]
 
 interface DemoSession extends SessionSummary {
   point: RssiByDistancePoint | null
@@ -105,20 +107,8 @@ export function demoSessions(): SessionSummary[] {
   }))
 }
 
-function accuracy(counts: number[][]): number {
-  let correct = 0
-  let total = 0
-  counts.forEach((row, i) =>
-    row.forEach((n, j) => {
-      total += n
-      if (i === j) correct += n
-    })
-  )
-  return (correct / total) * 100
-}
-
 export function demoResults(): ResultsReport {
-  // counts[actual][predicted], in held-out windows.
+  // counts[actual][predicted]. Made-up sample counts that only show the layout.
   const typeCounts = [
     [151, 5, 13, 6],
     [7, 160, 5, 3],
@@ -131,17 +121,17 @@ export function demoResults(): ResultsReport {
     [3, 62, 168],
   ]
 
-  const requirements: RequirementResult[] = [
-    { id: 1, value: 3.4, note: "Longest time to first alert across the demo sessions." },
-    { id: 2, value: accuracy(typeCounts), note: "From the device type confusion matrix below." },
-    { id: 3, value: accuracy(bandCounts), note: "From the distance band confusion matrix below." },
-    { id: 4, value: 0.31, note: "Median of receive time minus unit time." },
-    { id: 5, value: 0, note: "Alerts raised during the empty-room baselines." },
-    { id: 6, value: null, note: "The range test has not been run." },
-  ]
+  // Demo has no test run, so no requirement has a value. Nothing here may
+  // look like a result: the six requirements stay pending until a real run.
+  const requirements: RequirementResult[] = REQUIREMENT_IDS.map((id) => ({
+    id,
+    value: null,
+    note: "Not measured. Demo has no test run.",
+  }))
 
   return {
-    name: "demo-train",
+    name: "sample",
+    sample: true,
     generatedAt: SESSIONS[SESSIONS.length - 1].startedAt + 3_600_000,
     requirements,
     typeMatrix: { labels: TYPES, counts: typeCounts },

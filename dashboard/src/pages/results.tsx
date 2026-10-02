@@ -13,20 +13,34 @@ import type { DataSource } from "@/data/types"
 import { formatDateTime } from "@/lib/format"
 
 const NO_RUN = "No test run has been recorded. Run python -m ml.train on labelled sessions; its report is not served to the browser yet."
+const SAMPLE_NOTE = "Sample data, not a measurement."
+
+/** Marks a figure whose numbers are made up to show the layout. */
+function SampleChip() {
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-sm border border-dashed border-line-strong px-1.5 label-caps text-muted-foreground">
+      Sample data
+    </span>
+  )
+}
 
 export function ResultsPage() {
   const load = useCallback((s: DataSource) => s.loadResults(), [])
   const query = useSourceQuery(load)
   const loading = query.status === "loading"
   const report = query.status === "ready" ? query.value : null
+  const sample = report?.sample ?? false
+  const chip = sample ? <SampleChip /> : undefined
 
   return (
     <Page
       title="Results"
       description={
-        report
-          ? `Test run ${report.name}, ${formatDateTime(report.generatedAt)}. Measured on held-out sessions, against the six design requirements.`
-          : "The six design requirements, each with its target and the value measured on held-out sessions."
+        sample
+          ? "No test has been run yet, so every requirement is pending. The figures below are samples that only show the layout."
+          : report
+            ? `Test run ${report.name}, ${formatDateTime(report.generatedAt)}. Measured on held-out sessions, against the six design requirements.`
+            : "The six design requirements, each with its target and the value measured on held-out sessions."
       }
     >
       {REQUIREMENTS.map((requirement) => {
@@ -54,13 +68,18 @@ export function ResultsPage() {
         className="col-span-12 xl:col-span-7"
         title="Device type confusion matrix"
         description="Rows are the true type, columns the predicted type."
+        actions={chip}
       >
         {loading ? (
           <Skeleton className="h-56" />
         ) : report ? (
           <ConfusionMatrix
             matrix={report.typeMatrix}
-            caption="Figure (1) Device type, counted in 5 s windows from held-out sessions."
+            caption={
+              sample
+                ? `Figure (1) Device type. ${SAMPLE_NOTE}`
+                : "Figure (1) Device type, counted in 5 s windows from held-out sessions."
+            }
           />
         ) : (
           <EmptyState icon={<Grid3x3Icon />} title="No confusion matrix yet">
@@ -73,13 +92,18 @@ export function ResultsPage() {
         className="col-span-12 xl:col-span-5"
         title="Distance band confusion matrix"
         description="Rows are the true band, columns the predicted band."
+        actions={chip}
       >
         {loading ? (
           <Skeleton className="h-56" />
         ) : report ? (
           <ConfusionMatrix
             matrix={report.bandMatrix}
-            caption="Figure (2) Distance band, counted in 5 s windows from held-out sessions."
+            caption={
+              sample
+                ? `Figure (2) Distance band. ${SAMPLE_NOTE}`
+                : "Figure (2) Distance band, counted in 5 s windows from held-out sessions."
+            }
           />
         ) : (
           <EmptyState icon={<Grid3x3Icon />} title="No confusion matrix yet">
@@ -92,6 +116,7 @@ export function ResultsPage() {
         className="col-span-12"
         title="RSSI by distance"
         description="One dot per labelled session: its median RSSI at the distance it was recorded."
+        actions={chip}
       >
         {loading ? (
           <Skeleton className="h-72" />
@@ -100,6 +125,7 @@ export function ResultsPage() {
             <RssiDistanceChart points={report.rssiByDistance} />
             <figcaption className="text-[13px] text-muted-foreground">
               Figure (3) Median RSSI against distance from the unit. The shaded bands are near, mid and far.
+              {sample ? ` ${SAMPLE_NOTE}` : ""}
             </figcaption>
           </figure>
         ) : (
