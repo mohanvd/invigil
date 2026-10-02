@@ -51,9 +51,10 @@ What works today, on a laptop with no hardware:
 - **Logger** (`server/logger.py`): subscribes to the unit's topics, checks every message against the contract, and writes valid readings to CSV.
 - **Fake publisher** (`server/fake_publisher.py`): stands in for the unit and publishes readings in the right format. The numbers are placeholders, not physics.
 - **ML pipeline** (`ml/`): turns logged sessions into features, trains both models, and tests them on held-out sessions. It has only been run on synthetic data, which proves the code runs and nothing more.
-- **Tests** for the contract, the logger, the fake publisher and the ML pipeline.
+- **Dashboard** (`dashboard/`): the web app, with a Demo source that needs no broker and a Live source that reads Mosquitto over WebSockets. Alerts, sessions and results only exist in Demo so far. See [Dashboard](#dashboard).
+- **Tests** for the contract, the logger, the fake publisher, the ML pipeline and the dashboard's data layer.
 
-Not started: the firmware, the dashboard and the digital twin.
+Not started: the firmware and the digital twin.
 
 ## Hardware
 
@@ -137,6 +138,68 @@ More detail:
 - [Data collection protocol](docs/data-protocol.md): how to record and label sessions so the accuracy number is honest.
 - [Firmware plan](docs/firmware.md): modules and what must be measured on the real unit.
 
+## Dashboard
+
+The web app in `dashboard/` shows the live hall map and alerts, the recorded sessions, the test results, the unit's health and the settings. It is built with Vite, React, TypeScript, Tailwind CSS and shadcn/ui, and themed from [docs/brand](docs/brand/README.md).
+
+Install [Node.js](https://nodejs.org/) 24 and [pnpm](https://pnpm.io/installation), then run it from the `dashboard/` folder:
+
+```powershell
+cd dashboard
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`. It starts in Demo, so it needs no broker and no hardware.
+
+### Demo and Live
+
+The dashboard reads everything through one data interface with two sources. Pick one in Settings.
+
+- **Demo** (the default) makes mock readings in the browser. They follow the [MQTT contract](docs/contract.md) and use the same placeholder numbers as the fake publisher: the right shape, not the right physics. A "Demo data" badge stays in the top bar while Demo is active.
+- **Live** connects to Mosquitto with mqtt.js over WebSockets and subscribes to `invigil/node/+/+`.
+
+Detections (device type and distance band) are not published on MQTT yet. The topic is only a proposal at the end of the [MQTT contract](docs/contract.md). So in Live the hall map and the alerts list stay empty and say why, and Sessions and Results only fill in Demo until the server has an API for them.
+
+### Run it against the fake publisher
+
+A browser cannot open a plain MQTT socket, so `server/mosquitto.conf` has a second listener: WebSockets on port 9001. The unit and the Python tools keep using port 1883, and the login in the config applies to both listeners. The Windows Mosquitto service has no WebSockets listener, so use the project config:
+
+1. Start the broker as in [Using the real unit](docs/setup.md#using-the-real-unit): stop the Windows service, create `server/mosquitto.passwd` if you have not, then run:
+
+   ```powershell
+   mosquitto -c server/mosquitto.conf -v
+   ```
+
+   The log should show a listen socket on port 1883 and another on port 9001.
+
+2. Put the same username and password in `server/config.toml`, then start the fake unit in a second terminal:
+
+   ```powershell
+   python -m server.fake_publisher
+   ```
+
+3. Start the dashboard in a third terminal with `pnpm dev`, open Settings, choose Live, set the broker URL to `ws://localhost:9001`, enter the username and password, and save. The password is kept for that browser tab only.
+
+The top bar changes to "Unit N1 Online". The Unit page shows a status message every 10 s and the channel scan. The Live page counts the devices heard and charts their RSSI, and the hashes match the ground truth the fake publisher prints.
+
+Every live message is checked the same way `server/contract.py` checks it: a 12-character hashed address, `ts` in milliseconds, 126 hit counts, and so on. A message that fails is dropped, counted, and listed with its reason on the Unit page. It never reaches a chart.
+
+To read the dashboard from a phone on the same network, run `pnpm dev --host` and use the laptop's IP address in both the page URL and the broker URL.
+
+### Checks
+
+CI runs the same four commands in `dashboard/`:
+
+```powershell
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+The hall size and the seat positions on the map are placeholders in `dashboard/src/data/hall.ts`. Measure the real hall and replace them.
+
 ## Repo layout
 
 | Folder | What goes there |
@@ -146,7 +209,7 @@ More detail:
 | `ml/` | `features.py`, `label.py`, `train.py`, `synth.py` |
 | `data/raw/` | Recorded sessions. Gitignored, never committed |
 | `data/samples/` | Small anonymized samples that are safe to commit |
-| `dashboard/` | Web app: live hall map and alerts. Not started |
+| `dashboard/` | Web app: live hall map, alerts, sessions, results, unit health |
 | `simulation/` | Digital twin built from real calibration data. Not started |
 | `docs/` | Contract, protocols, brand assets, and `results/` for every calibration or test run |
 
@@ -172,7 +235,8 @@ Phase 1, one unit:
 - [ ] Firmware: BLE scanner, channel scanner, Wi-Fi and MQTT link
 - [ ] Calibration: signal strength at each distance, sweep timing, thresholds
 - [ ] Dataset: about 72 labeled sessions plus a sealed test set
-- [ ] Dashboard: live hall map and alerts
+- [x] Dashboard on demo data and on live readings from the broker
+- [ ] Detections on MQTT, so the live hall map and alerts fill from the real models
 - [ ] Digital twin built from the calibration data
 
 Phase 2, later:
