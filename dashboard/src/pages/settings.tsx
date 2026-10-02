@@ -2,6 +2,7 @@ import { PlusIcon, ShieldIcon } from "lucide-react"
 import { useId, useState } from "react"
 import type { FormEvent, ReactNode } from "react"
 
+import { DEMO_ONLY } from "@/app/build"
 import { useHall } from "@/app/data"
 import { HASH_RE, isBrokerUrl, useSettings } from "@/app/settings"
 import { THEMES, THEME_LABEL, useTheme } from "@/app/theme"
@@ -158,13 +159,13 @@ function DataSourcePanel() {
   )
 }
 
-function HallPanel() {
+function HallPanel({ className }: { className: string }) {
   const { settings, update } = useSettings()
   const { theme, setTheme } = useTheme()
   const [name, setName] = useState(settings.hallName)
 
   return (
-    <Panel className="col-span-12 xl:col-span-5" title="Hall and display">
+    <Panel className={className} title="Hall and display">
       <div className="flex flex-col gap-4">
         <Field label="Hall name" hint="Shown in the top bar and on the Live page.">
           {(id) => (
@@ -330,8 +331,9 @@ function ResetPanel() {
     <Panel className="col-span-12" title="Reset">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-[70ch] text-[13px] text-muted-foreground">
-          Clears the broker URL, the login, the hall name and the allowed devices stored in this browser, and returns to
-          Demo and the dark theme.
+          {DEMO_ONLY
+            ? "Clears the hall name and the allowed devices stored in this browser, and returns to the dark theme."
+            : "Clears the broker URL, the login, the hall name and the allowed devices stored in this browser, and returns to Demo and the dark theme."}
         </p>
         <Dialog>
           <DialogTrigger asChild>
@@ -375,8 +377,8 @@ export function SettingsPage() {
 
   return (
     <Page title="Settings" description="Stored in this browser only. Nothing here is sent to the unit.">
-      <DataSourcePanel key={`source-${formKey}`} />
-      <HallPanel key={`hall-${formKey}`} />
+      {DEMO_ONLY ? null : <DataSourcePanel key={`source-${formKey}`} />}
+      <HallPanel key={`hall-${formKey}`} className={DEMO_ONLY ? "col-span-12" : "col-span-12 xl:col-span-5"} />
       <AllowedPanel />
       <ResetPanel />
     </Page>

@@ -5,6 +5,7 @@ import { SettingsProvider } from "@/app/settings-provider"
 import { ThemeProvider } from "@/app/theme-provider"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ConnectionNotice } from "@/components/connection-notice"
+import { DemoNotice } from "@/components/demo-notice"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -30,6 +31,7 @@ function Shell() {
     <SidebarProvider style={{ "--sidebar-width": "13.5rem" } as React.CSSProperties}>
       <AppSidebar page={page} />
       <SidebarInset className="min-w-0">
+        <DemoNotice />
         <SiteHeader page={page} />
         <ConnectionNotice />
         <Current />

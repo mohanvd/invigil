@@ -5,6 +5,7 @@ import { createDemoSource } from "@/data/demo-source"
 import { createLiveSource } from "@/data/live-source"
 import { createHallStore } from "@/data/store"
 
+import { DEMO_ONLY, effectiveSource } from "./build"
 import { DataContext } from "./data"
 import { useSettings } from "./settings"
 
@@ -12,12 +13,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { settings, password } = useSettings()
   const [store] = useState(() => createHallStore())
 
+  const kind = effectiveSource(settings.source, DEMO_ONLY)
+
   const source = useMemo(
     () =>
-      settings.source === "live"
+      kind === "live"
         ? createLiveSource({ url: settings.brokerUrl, username: settings.username, password })
         : createDemoSource(),
-    [settings.source, settings.brokerUrl, settings.username, password]
+    [kind, settings.brokerUrl, settings.username, password]
   )
 
   useEffect(() => {
