@@ -60,15 +60,16 @@ Not started: the firmware and the digital twin.
 
 | Part | Quantity | Used for | Price (EGP) |
 | --- | --- | --- | --- |
-| Raspberry Pi Pico 2 W (RP2350 + CYW43439) | 1 | Main board, BLE scanner, Wi-Fi | TBD |
-| nRF24L01+PA+LNA module with antenna | 1 | 2.4 GHz channel scanner, receive only | TBD |
-| 100 uF electrolytic capacitor | 1 | Steadies the radio's supply | TBD |
-| Breadboard and jumper wires | 1 set | Wiring | TBD |
-| Micro USB cable | 1 | Power and flashing | TBD |
-| USB power bank or 5 V adapter | 1 | Power in the hall | TBD |
-| **Total** | | | **TBD** |
+| Raspberry Pi Pico 2 W (RP2350 + CYW43439) | 1 | Main board, BLE scanner, Wi-Fi | 1,050 (Dev Boards Market) |
+| nRF24L01+PA+LNA module with antenna | 1 | 2.4 GHz channel scanner, receive only | 220 (Makers Electronics) |
+| 100 uF electrolytic capacitor | 1 | Steadies the radio's supply | 1 |
+| Breadboard (830 points) and 20 jumper wires | 1 set | Wiring | 50 |
+| 1x40 male pin header | 2 | Soldered to the Pico so it plugs into the breadboard | 10 |
+| Micro USB cable | 1 | Power and flashing | Owned |
+| USB power bank | 1 | Power in the hall | Owned |
+| **Total** | | | **About 1,331** |
 
-Prices will be filled in when the parts are bought. A laptop on the same Wi-Fi network runs the broker, the logger and the models.
+Prices are store listings from October 2026, before delivery. A laptop on the same Wi-Fi network runs the broker, the logger and the models.
 
 ### Wiring
 
