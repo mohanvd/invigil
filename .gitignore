@@ -8,6 +8,8 @@ secrets.*
 # Raw captures never leave the laptop. Anonymized samples go in data/samples/.
 data/raw/*
 !data/raw/.gitkeep
+# Fake sessions from ml/synth.py, regenerate any time.
+data/synthetic/
 
 # Python
 __pycache__/
@@ -20,6 +22,10 @@ venv/
 # PlatformIO / ESP-IDF
 .pio/
 firmware/**/build/
+firmware/managed_components/
+# Generated from sdkconfig.defaults on the first build; only the defaults are committed.
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json

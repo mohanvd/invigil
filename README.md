@@ -4,7 +4,7 @@
 
 Invigil detects hidden cheating devices (phones, Bluetooth earpieces, smartwatches) in exam halls by listening passively to the 2.4 GHz band. Three sensor nodes scan for Bluetooth advertisements and radio activity, send their readings over Wi-Fi to a laptop, and a machine learning model decides what kind of device it is and which zone of the hall it is in.
 
-Grade 12 STEM capstone, team 12322, Egypt, 2026-2027.
+Grade 12 STEM capstone, team 12323, Egypt, 2026-2027.
 
 ## Repo layout
 
@@ -139,6 +139,86 @@ Every message is checked against the [MQTT contract](docs/contract.md) by `serve
 ```bash
 python -m pytest server
 ```
+
+## Firmware
+
+Node firmware for the ESP32-S3 N16R8 (16 MB flash, 8 MB octal PSRAM), built with ESP-IDF through PlatformIO. The capstone bans Arduino, so the project uses ESP-IDF only.
+
+What the node does now (the nRF24L01 scanner comes later):
+
+- At boot, it runs the [address hashing test vector](#address-hashing-test-vector) and logs PASS or FAIL.
+- It joins Wi-Fi, sets its clock from NTP, and connects to the broker. It reconnects on its own after any drop.
+- It alternates scan windows and send windows, as the [MQTT contract](docs/contract.md) requires. During a scan window it runs a passive BLE scan and publishes nothing. During a send window scanning is off, and it publishes the queued `ble` readings, plus a `status` message every 10 seconds.
+
+| File | Module |
+| --- | --- |
+| `src/config.c` | `config`: settings from `secrets.h`, timing constants in `config.h` |
+| `src/wifi_sta.c` | Wi-Fi station and NTP clock |
+| `src/mqtt_link.c` | `mqtt_client`: broker connection, publishing, status. Named `mqtt_link` because ESP-IDF's MQTT library already uses the header name `mqtt_client.h` |
+| `src/ble_scan.c` | `ble_scan`: NimBLE passive scan, address hashing, test vector |
+| `src/main.c` | Boot sequence and the scan and send window loop |
+
+ESP-IDF 6 no longer bundles the MQTT client. `src/idf_component.yml` pulls it from the ESP Component Registry on the first build, and `dependencies.lock` pins the exact version so every build uses the same one.
+
+### One-time setup
+
+1. Install PlatformIO, either way works:
+   - **VS Code:** install the PlatformIO IDE extension, then open the `firmware/` folder.
+   - **Command line:** in the project virtual environment from the server setup, run `pip install platformio`.
+
+   The first build downloads ESP-IDF 6.1 and its compilers into your user folder (`.platformio`, about 7 GB on disk) and then compiles all of ESP-IDF. Expect 20 minutes or more. Later builds take a few minutes.
+2. Create the secrets file from the template, then fill it in:
+
+   ```bash
+   copy firmware\src\secrets.h.example firmware\src\secrets.h
+   ```
+
+   `secrets.h` is gitignored. Use the same MQTT username and password as the broker, and the same `INVIGIL_HASH_SALT` as `hash_salt` in `server/config.toml`, or the hashes from the nodes will not match anything the server computes. The build stops with a clear error if the file is missing or the Wi-Fi name, broker address or salt is empty.
+
+### Build, flash and monitor
+
+Run these from the repo root. In VS Code, the PlatformIO toolbar has the same Build, Upload and Monitor buttons.
+
+```bash
+pio run -d firmware
+```
+
+```bash
+pio run -d firmware -t upload
+```
+
+```bash
+pio device monitor -d firmware
+```
+
+- To flash and then open the monitor in one step: `pio run -d firmware -t upload -t monitor`. Press Ctrl+C to leave the monitor.
+- If more than one serial port is connected, add `--upload-port COM5` to the upload command and `-p COM5` to the monitor command (use the port Device Manager shows).
+- Many N16R8 boards have two USB ports. The log appears on the one wired to the USB-to-UART chip, usually labeled UART or COM. If no COM port appears at all, install the driver for that chip (often CH343 or CP210x). Check this on your own board.
+- Each board needs its own node ID. Set `INVIGIL_NODE_ID` in `secrets.h`, then build and flash, once per board.
+
+The log lines to look for on a healthy boot (the values will differ):
+
+```
+ble: hash test vector PASS (41239c0be85e)
+wifi: connected to "<ssid>", IP <node ip>
+mqtt: connected to mqtt://<laptop ip>:1883
+node: clock set, starting scan windows (800 ms scan, 200 ms send)
+node: last 10 s: <n> ble sent, 0 dropped offline, 0 dropped queue full
+```
+
+### Changing the ESP-IDF configuration
+
+`firmware/sdkconfig.defaults` is committed and holds the settings that matter: flash size, octal PSRAM, NimBLE in the observer role only, the 1.5 MB app partition, and the 1-minute NTP re-sync. PlatformIO reads the partition table from `platformio.ini` instead, so if you change it, change `board_build.partitions` there too. The first build generates `firmware/sdkconfig.node` from it, and that file is gitignored. The defaults only apply when `sdkconfig.node` is created, so after editing `sdkconfig.defaults`, delete `sdkconfig.node` and build again.
+
+`pio run -d firmware -t menuconfig` opens the full ESP-IDF menu, but changes made there only land in `sdkconfig.node`. Copy any change you want to keep into `sdkconfig.defaults`.
+
+### Placeholders to measure
+
+These numbers in `firmware/src/config.h` are guesses until tested on real nodes:
+
+- `SCAN_WINDOW_MS` (800) and `SEND_WINDOW_MS` (200): how long each window lasts.
+- `SEND_GUARD_MS` (20): quiet time after the last publish before scanning restarts. Once the nRF24L01 scanner exists, check that the node's own Wi-Fi channel shows no hits in scan windows.
+- The 256-reading queue in `ble_scan.c`: the log reports "dropped queue full" if it is too small.
 
 ## Address hashing test vector
 
