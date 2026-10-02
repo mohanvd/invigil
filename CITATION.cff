@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: "If you use Invigil, please cite it using this file."
+type: software
+title: "Invigil: passive wireless detection of hidden cheating devices in exam halls"
+abstract: >-
+  Invigil detects hidden phones, Bluetooth earpieces and smartwatches in exam
+  halls by listening passively to the 2.4 GHz band. One Raspberry Pi Pico 2 W
+  unit with an nRF24L01+PA+LNA radio sends its readings over Wi-Fi and MQTT to
+  a laptop, where a model reports the device type and the distance band.
+  Grade 12 STEM capstone, team 12323.
+authors:
+  - given-names: Mohanad
+    family-names: Tarek
+    affiliation: Alexandria STEM School
+  - given-names: Ahmed
+    family-names: Khalifa
+    affiliation: Alexandria STEM School
+  - given-names: Ali
+    family-names: Hamdeen
+    affiliation: Alexandria STEM School
+repository-code: "https://github.com/mohanvd/invigil"
+license: MIT
+keywords:
+  - bluetooth-low-energy
+  - nrf24l01
+  - raspberry-pi-pico
+  - mqtt
+  - machine-learning
+  - exam-integrity
+preferred-citation:
+  type: software
+  title: "Invigil: passive wireless detection of hidden cheating devices in exam halls"
+  authors:
+    - given-names: Mohanad
+      family-names: Tarek
+      affiliation: Alexandria STEM School
+    - given-names: Ahmed
+      family-names: Khalifa
+      affiliation: Alexandria STEM School
+    - given-names: Ali
+      family-names: Hamdeen
+      affiliation: Alexandria STEM School
+  year: 2026
+  institution:
+    name: Alexandria STEM School
+  url: "https://github.com/mohanvd/invigil"
