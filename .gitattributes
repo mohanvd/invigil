@@ -1,0 +1,26 @@
+# Text files use LF line endings in the repo and in the working copy.
+* text=auto eol=lf
+
+# SVG is text, so diffs stay readable.
+*.svg text eol=lf
+
+# Fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+
+# Firmware images and trained models
+*.uf2 binary
+*.joblib binary
+*.pkl binary
