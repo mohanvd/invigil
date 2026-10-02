@@ -1,0 +1,155 @@
+/*
+  Invigil theme for shadcn/ui on Tailwind CSS v4.
+  Generated from docs/brand/tokens.json. Paste into the dashboard's global CSS,
+  replacing the :root, .dark and @theme inline blocks that `shadcn init` wrote.
+
+  Rules that come with it (see docs/brand/README.md):
+  - near, mid, far mean distance bands only. Never use them for errors or decoration.
+  - destructive maps to ink, not red. Patch the Button "destructive" variant to use
+    text-background instead of text-white so it reads in both themes.
+  - Dark is the default theme: put class="dark" on <html> unless the user picks light.
+*/
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 8px;
+  --background: #F4F6F9;
+  --foreground: #0E1726;
+  --card: #FFFFFF;
+  --card-foreground: #0E1726;
+  --popover: #FFFFFF;
+  --popover-foreground: #0E1726;
+  --primary: #15243F;
+  --primary-foreground: #F4F6F9;
+  --secondary: #E9EDF3;
+  --secondary-foreground: #0E1726;
+  --muted: #E9EDF3;
+  --muted-foreground: #4B5871;
+  --accent: #E9EDF3;
+  --accent-foreground: #0E1726;
+  --destructive: #0E1726;
+  --border: #D3DAE4;
+  --input: #75839A;
+  --ring: #1F5FD1;
+  --chart-1: #2563C9;
+  --chart-2: #B87400;
+  --chart-3: #CC2F3B;
+  --chart-4: #15243F;
+  --chart-5: #4B5871;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #0E1726;
+  --sidebar-primary: #15243F;
+  --sidebar-primary-foreground: #F4F6F9;
+  --sidebar-accent: #E9EDF3;
+  --sidebar-accent-foreground: #0E1726;
+  --sidebar-border: #D3DAE4;
+  --sidebar-ring: #1F5FD1;
+  --navy: #15243F;
+  --on-navy: #F4F6F9;
+  --paper-sunken: #E9EDF3;
+  --near: #CC2F3B;
+  --mid: #B87400;
+  --far: #2563C9;
+  --near-soft: #FBE2E3;
+  --mid-soft: #FBEED3;
+  --far-soft: #E2EBFA;
+  --clear: #0B7A68;
+  --clear-soft: #DDF3EE;
+}
+
+.dark {
+  --background: #0A111E;
+  --foreground: #E6ECF5;
+  --card: #111B2D;
+  --card-foreground: #E6ECF5;
+  --popover: #111B2D;
+  --popover-foreground: #E6ECF5;
+  --primary: #5B9DFF;
+  --primary-foreground: #0A111E;
+  --secondary: #060B14;
+  --secondary-foreground: #E6ECF5;
+  --muted: #060B14;
+  --muted-foreground: #9AA7BD;
+  --accent: #111B2D;
+  --accent-foreground: #E6ECF5;
+  --destructive: #E6ECF5;
+  --border: #24324A;
+  --input: #5E6E8C;
+  --ring: #7DB4FF;
+  --chart-1: #5B9DFF;
+  --chart-2: #F2B13D;
+  --chart-3: #FF5E6B;
+  --chart-4: #E6ECF5;
+  --chart-5: #9AA7BD;
+  --sidebar: #060B14;
+  --sidebar-foreground: #E6ECF5;
+  --sidebar-primary: #5B9DFF;
+  --sidebar-primary-foreground: #0A111E;
+  --sidebar-accent: #111B2D;
+  --sidebar-accent-foreground: #E6ECF5;
+  --sidebar-border: #24324A;
+  --sidebar-ring: #7DB4FF;
+  --navy: #22385F;
+  --on-navy: #E6ECF5;
+  --paper-sunken: #060B14;
+  --near: #FF5E6B;
+  --mid: #F2B13D;
+  --far: #5B9DFF;
+  --near-soft: #41161C;
+  --mid-soft: #3A2A0E;
+  --far-soft: #13284D;
+  --clear: #34D1B5;
+  --clear-soft: #0E3530;
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, ui-monospace, monospace;
+  --font-display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-navy: var(--navy);
+  --color-on-navy: var(--on-navy);
+  --color-paper-sunken: var(--paper-sunken);
+  --color-near: var(--near);
+  --color-mid: var(--mid);
+  --color-far: var(--far);
+  --color-near-soft: var(--near-soft);
+  --color-mid-soft: var(--mid-soft);
+  --color-far-soft: var(--far-soft);
+  --color-clear: var(--clear);
+  --color-clear-soft: var(--clear-soft);
+}
