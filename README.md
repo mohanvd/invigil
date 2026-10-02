@@ -1,157 +1,73 @@
-# Invigil
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo/invigil-logo-dark.svg">
+    <img src="docs/brand/logo/invigil-logo.svg" alt="Invigil" width="320">
+  </picture>
+</p>
+
+Invigil finds hidden phones, Bluetooth earpieces and smartwatches in an exam hall by listening to the 2.4 GHz radio band, without transmitting anything.
 
 *Every signal leaves a trace.*
 
-Invigil detects hidden cheating devices (phones, Bluetooth earpieces, smartwatches) in exam halls by listening passively to the 2.4 GHz band. One sensor unit, a Raspberry Pi Pico 2 W with an nRF24L01+PA+LNA radio, scans for Bluetooth advertisements and radio activity and sends its readings over Wi-Fi to a laptop. A machine learning model then decides what kind of device it is (phone, earpiece, smartwatch, or allowed) and how far it is from the unit (near, mid, or far). Seat zones and more units are Phase 2.
+[![CI](https://github.com/mohanvd/invigil/actions/workflows/ci.yml/badge.svg)](https://github.com/mohanvd/invigil/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Grade 12 STEM capstone, team 12323, Egypt, 2026-2027.
+## What it does
 
-## Repo layout
+One sensor unit sits at the edge of a 6-seat mini exam hall. It is a Raspberry Pi Pico 2 W with an nRF24L01+PA+LNA radio, and it listens in two ways:
 
-| Folder | What goes there |
-| --- | --- |
-| `firmware/` | Pico 2 W unit code (Pico SDK, C, CMake). In progress |
-| `server/` | MQTT logger, fake data publisher, later the dashboard API |
-| `ml/` | `features.py`, `label.py`, `train.py`, `synth.py`. See the [data collection protocol](docs/data-protocol.md) |
-| `data/raw/` | Recorded sessions. Gitignored, never committed |
-| `data/samples/` | Small anonymized samples that are safe to commit |
-| `dashboard/` | Web app: live hall map and alerts |
-| `simulation/` | Digital twin built from real calibration data |
-| `docs/` | Diagrams, brand assets, and `results/` for every calibration or test run |
+- **BLE scanner.** The Pico's own radio hears Bluetooth Low Energy advertisements and reads the signal strength (RSSI) and the manufacturer ID. The address is hashed on the unit.
+- **Channel scanner.** The nRF24L01 sweeps 126 channels of the 2.4 GHz band and counts where it hears a carrier. Bluetooth audio shows up as scattered hits across the band because it hops between channels. Wi-Fi shows up as fixed blocks.
 
-## Running the server tools
+The unit sends its readings over Wi-Fi with MQTT to a laptop. On the laptop, a model answers two questions about each device:
 
-The server folder has two tools:
+1. **Device type:** phone, earpiece, smartwatch, or allowed (a proctor's device).
+2. **Distance band from the unit:** near (under 1 m), mid (1 to 2 m), or far (2 to 3.5 m).
 
-- **Logger** (`server/logger.py`): subscribes to the unit's topics and saves each valid reading to CSV.
-- **Fake publisher** (`server/fake_publisher.py`): pretends to be the sensor unit (N1) and publishes readings that follow the [MQTT contract](docs/contract.md). Use it to work on the logger, dashboard and ML pipeline before the hardware is ready.
-
-Run every command from the repo root.
-
-### One-time setup
-
-1. Install Python 3.11 or newer and [Mosquitto](https://mosquitto.org/download/). On Windows, the installer puts Mosquitto in `C:\Program Files\mosquitto` but does not add it to the PATH. Add that folder to the PATH so the `mosquitto`, `mosquitto_sub` and `mosquitto_passwd` commands below work.
-2. Create a virtual environment and install the dependencies:
-
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-   On macOS or Linux, activate with `source .venv/bin/activate` instead.
-3. Create your config file from the template, then fill it in:
-
-   ```bash
-   copy server\config.toml.example server\config.toml
-   ```
-
-   On macOS or Linux, use `cp` and forward slashes. `server/config.toml` is gitignored because it holds the MQTT password and the hash salt. Without it, both tools connect to `localhost:1883` with no login, and the fake publisher picks a random salt for each run.
-
-### Try it with fake data (no hardware needed)
-
-You need a broker on `localhost:1883`. On Windows, the Mosquitto installer adds a service that already runs one, so you can skip to step 2. Otherwise, start one in its own terminal with `mosquitto -v`.
-
-1. In terminal 1, start the logger. The session name becomes part of the output folder name:
-
-   ```bash
-   python -m server.logger --session fake-test
-   ```
-
-2. In terminal 2, start the fake unit:
-
-   ```bash
-   python -m server.fake_publisher
-   ```
-
-The fake publisher prints the ground truth for the run: each fake device's hashed address, its type, its distance band, and its distance from the unit. Every 10 seconds the logger prints how many messages it got from the unit, the latency, and how many messages it rejected. Press Ctrl+C in each terminal to stop.
-
-Useful options (add `--help` to either command to see all of them):
-
-| Command | Option | What it does |
-| --- | --- | --- |
-| logger | `--session NAME` | Output folder is `data/raw/<date>-NAME/`. Reusing a name appends to it. |
-| logger | `--out DIR` | Write somewhere other than `data/raw/` |
-| both | `--host`, `--port` | Override the broker address from the config |
-| fake | `--duration 60` | Stop after 60 seconds |
-| fake | `--seed 1` | Same fake devices and readings every run |
-| fake | `--scan-ms`, `--send-ms`, `--sweeps` | Change the scan and send window timing |
-
-To watch the raw messages on the broker, run `mosquitto_sub -t "invigil/#" -v`.
-
-**The fake data has the right shape, not the right physics.** The distances, signal strengths, and device behavior in `server/fake_publisher.py` are placeholders marked as guesses. Replace them with calibration results, and never train the final models on fake data.
-
-### Using the real unit
-
-The unit connects to the laptop over Wi-Fi, so the broker must listen on the network and require a password. The Windows Mosquitto service only listens on localhost, so stop it first (in a terminal run as administrator: `net stop mosquitto`). Then:
-
-1. Create the password file (gitignored). It asks for a password:
-
-   ```bash
-   mosquitto_passwd -c server/mosquitto.passwd invigil
-   ```
-
-2. Start the broker with the project config:
-
-   ```bash
-   mosquitto -c server/mosquitto.conf -v
-   ```
-
-3. Put the same username and password in `server/config.toml` and in the firmware secrets. Point the unit at the laptop's IP address (find it with `ipconfig`).
-4. If Windows Firewall asks, allow Mosquitto on private networks.
-5. Start the logger as above.
-
-### What the logger writes
-
-Each session folder holds three CSV files, one per message type:
-
-| File | Columns |
-| --- | --- |
-| `ble.csv` | `rx_ts, ts, node, addr, rssi, mfr` |
-| `spectrum.csv` | `rx_ts, ts, node, sweeps, ch000 ... ch125` |
-| `status.csv` | `rx_ts, ts, node, uptime_s, wifi_rssi, fw` |
-
-- `ts` is when the unit took the reading. `rx_ts` is when the laptop received it. Both are milliseconds since epoch, so `rx_ts - ts` is the unit-to-laptop latency (design requirement 4). The two clocks are only as close as SNTP keeps them, so check the clock offset before you report a latency result. A negative latency means the unit clock is ahead.
-- Fake runs show `fw` as `0.1.0-fake` in `status.csv`.
-- Files are flushed after every row, so a crash or Ctrl+C loses nothing.
-
-Load a session with pandas:
-
-```python
-import pandas as pd
-ble = pd.read_csv("data/raw/2026-09-27-fake-test/ble.csv")
+```mermaid
+flowchart LR
+    D["Phone, earpiece or smartwatch"] -->|2.4 GHz signals| U
+    subgraph U["Unit N1: Pico 2 W + nRF24L01+PA+LNA"]
+        B["BLE scanner: hashed address, RSSI, manufacturer ID"]
+        S["Channel scanner: hits on 126 channels"]
+    end
+    U -->|Wi-Fi, MQTT| M["Mosquitto broker on the laptop"]
+    M --> L["Logger: checks each message, writes CSV"]
+    L --> F["Features per time window"]
+    F --> T["Model 1: device type"]
+    F --> R["Model 2: distance band"]
+    T --> A["Dashboard: alerts and hall map"]
+    R --> A
 ```
 
-### What the logger rejects
+The message formats are in the [MQTT contract](docs/contract.md).
 
-Every message is checked against the [MQTT contract](docs/contract.md) by `server/contract.py`. A message that fails is counted and its reason is printed once, but it is never written to disk. The logger rejects:
+## Status
 
-- topics other than `invigil/node/N1/{ble|spectrum|status}`, or a `node` field that does not match the topic
-- missing or extra fields
-- `ts` before 2020, which means the unit has not synced its clock yet or sent seconds instead of milliseconds
-- `addr` that is not exactly 12 lowercase hex characters (so a raw MAC like `A9:1F:03:C2:D4:E8` is refused)
-- `mfr` that is not `null` or a company ID like `"0x004C"`
-- `hits` that is not 126 integers between 0 and `sweeps`
-- decimal numbers or `true`/`false` where an integer is expected
+Invigil is a Grade 12 school capstone and a work in progress. **The hardware is not built yet**, so nothing here has been tested against real devices, and no accuracy or range figure exists yet.
 
-### Tests
+What works today, on a laptop with no hardware:
 
-```bash
-python -m pytest
-```
+- **Logger** (`server/logger.py`): subscribes to the unit's topics, checks every message against the contract, and writes valid readings to CSV.
+- **Fake publisher** (`server/fake_publisher.py`): stands in for the unit and publishes readings in the right format. The numbers are placeholders, not physics.
+- **ML pipeline** (`ml/`): turns logged sessions into features, trains both models, and tests them on held-out sessions. It has only been run on synthetic data, which proves the code runs and nothing more.
+- **Tests** for the contract, the logger, the fake publisher and the ML pipeline.
 
-This runs the tests in `server/` and `ml/`.
+Not started: the firmware, the dashboard and the digital twin.
 
-## Firmware (in progress)
+## Hardware
 
-The unit firmware is not written yet. The plan:
+| Part | Quantity | Used for | Price (EGP) |
+| --- | --- | --- | --- |
+| Raspberry Pi Pico 2 W (RP2350 + CYW43439) | 1 | Main board, BLE scanner, Wi-Fi | TBD |
+| nRF24L01+PA+LNA module with antenna | 1 | 2.4 GHz channel scanner, receive only | TBD |
+| 100 uF electrolytic capacitor | 1 | Steadies the radio's supply | TBD |
+| Breadboard and jumper wires | 1 set | Wiring | TBD |
+| Micro USB cable | 1 | Power and flashing | TBD |
+| USB power bank or 5 V adapter | 1 | Power in the hall | TBD |
+| **Total** | | | **TBD** |
 
-- Board: Raspberry Pi Pico 2 W (RP2350 + CYW43439 radio).
-- Toolchain: the official Pico SDK in C with CMake, built with the Raspberry Pi Pico VS Code extension. The capstone bans Arduino and ESP boards, so the project uses neither, and no Arduino-Pico core.
-- BLE: passive scan on the Pico's own radio using BTstack, observer only.
-- 2.4 GHz sweep: nRF24L01+PA+LNA on SPI0, 126 channels, RPD hits. Receive only.
-- Network: Wi-Fi and MQTT (lwIP MQTT app) to Mosquitto on the laptop, SNTP for timestamps.
-- Wi-Fi and Bluetooth share the CYW43 radio, so scan windows and send windows alternate, as the [MQTT contract](docs/contract.md) requires.
+Prices will be filled in when the parts are bought. A laptop on the same Wi-Fi network runs the broker, the logger and the models.
 
 ### Wiring
 
@@ -161,47 +77,138 @@ Check each pin against the Pico 2 W pinout before soldering.
 | --- | --- |
 | VCC | 3V3(OUT). Never 5 V |
 | GND | GND |
-| SCK | GP18 |
-| MOSI | GP19 |
-| MISO | GP16 |
+| SCK | GP18 (SPI0) |
+| MOSI | GP19 (SPI0) |
+| MISO | GP16 (SPI0) |
 | CSN | GP17 |
 | CE | GP20 |
 
 Put a 100 uF capacitor across the radio's VCC and GND, close to the module.
 
-### Planned modules
+## Quick start
 
-| Module | Job |
+You can run the whole laptop side with fake data and no hardware. These commands are for Windows PowerShell, run from the repo root.
+
+1. Install [Python](https://www.python.org/downloads/) 3.11 or newer and [Mosquitto](https://mosquitto.org/download/). The Windows installer adds a Mosquitto service that runs a broker on `localhost:1883`.
+
+2. Create a virtual environment and install the dependencies:
+
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+
+3. Start the logger in one terminal:
+
+   ```powershell
+   python -m server.logger --session fake-test
+   ```
+
+4. Start the fake unit in a second terminal (activate the virtual environment there too):
+
+   ```powershell
+   python -m server.fake_publisher
+   ```
+
+   The logger prints a summary every 10 seconds and writes CSV files to `data/raw/<date>-fake-test/`. Press Ctrl+C in each terminal to stop.
+
+5. Run the tests:
+
+   ```powershell
+   python -m pytest
+   ```
+
+6. Check the ML pipeline on synthetic sessions:
+
+   ```powershell
+   python -m ml.synth
+   python -m ml.train --data data/synthetic
+   ```
+
+   The score it prints only proves the code runs. Never report it.
+
+**Linux and macOS:** use `python3 -m venv .venv` and `source .venv/bin/activate`. Install Mosquitto with your package manager (`sudo apt install mosquitto` or `brew install mosquitto`) and start it with `mosquitto -v` if it is not already running. Every `python -m ...` command is the same.
+
+More detail:
+
+- [Setup and operation](docs/setup.md): config file, command options, broker setup for the real unit, CSV formats, what the logger rejects.
+- [Address hashing](docs/hashing.md): the hashing rule and the test vector the firmware must reproduce.
+- [Data collection protocol](docs/data-protocol.md): how to record and label sessions so the accuracy number is honest.
+- [Firmware plan](docs/firmware.md): modules and what must be measured on the real unit.
+
+## Repo layout
+
+| Folder | What goes there |
 | --- | --- |
-| `ble_scan` | BTstack passive scan, address hashing, boot-time test vector |
-| `nrf_scan` | nRF24L01 channel sweep, RPD hit counts |
-| `mqtt_link` | Broker connection, publishing, status messages |
-| `config` | Settings from the gitignored secrets file, timing constants |
-| `wifi_sta` | Wi-Fi station and SNTP clock |
+| `firmware/` | Pico 2 W unit code (Pico SDK, C, CMake). Not started |
+| `server/` | MQTT logger, fake data publisher, later the dashboard API |
+| `ml/` | `features.py`, `label.py`, `train.py`, `synth.py` |
+| `data/raw/` | Recorded sessions. Gitignored, never committed |
+| `data/samples/` | Small anonymized samples that are safe to commit |
+| `dashboard/` | Web app: live hall map and alerts. Not started |
+| `simulation/` | Digital twin built from real calibration data. Not started |
+| `docs/` | Contract, protocols, brand assets, and `results/` for every calibration or test run |
 
-### To measure on the real unit
+## Design requirements
 
-These depend on hardware behavior, so they are tests to run, not numbers to assume:
+The prototype is tested against these six requirements. None has been measured yet.
 
-- How long the scan window and send window should be, and how much quiet time is needed after the last publish before scanning restarts.
-- How long one 126-channel sweep takes.
-- Whether the unit's own Wi-Fi channel shows hits during scan windows.
-- The byte order BTstack uses for addresses (see the test vector below).
+| # | Requirement | Target |
+| --- | --- | --- |
+| 1 | Response time | At most 5 s from when a device starts transmitting |
+| 2 | Device type accuracy | At least 85% on held-out sessions |
+| 3 | Distance band accuracy | At least 80% on held-out sessions |
+| 4 | Alert latency | Unit to dashboard within 2 s |
+| 5 | False alarms | At most 1 per exam hour |
+| 6 | Detection range | At least 3 m, covering a 6-seat mini hall |
 
-## Address hashing test vector
+## Roadmap
 
-The unit hashes every BLE address before sending it: `sha256(salt + 6 address bytes)`, keeping the first 12 hex characters. The salt is its UTF-8 bytes. The address bytes go most significant first, in the order the address is printed. `hash_addr` in `server/contract.py` is the reference.
+Phase 1, one unit:
 
-The byte order BTstack hands addresses over in is not assumed. The firmware must reproduce this test vector at boot, and that is checked on real hardware:
+- [x] MQTT contract, logger and fake publisher
+- [x] ML pipeline with held-out session testing
+- [ ] Firmware: BLE scanner, channel scanner, Wi-Fi and MQTT link
+- [ ] Calibration: signal strength at each distance, sweep timing, thresholds
+- [ ] Dataset: about 72 labeled sessions plus a sealed test set
+- [ ] Dashboard: live hall map and alerts
+- [ ] Digital twin built from the calibration data
 
-| Input | Value |
-| --- | --- |
-| Salt | `invigil-test-vector` |
-| Address as printed | `01:23:45:67:89:AB` |
-| Bytes hashed | `invigil-test-vector` followed by `01 23 45 67 89 AB` |
-| **Expected hash** | **`41239c0be85e`** |
-| Hash with the wrong byte order | `5cebc32cde2c` |
+Phase 2, later:
 
-If the unit prints `5cebc32cde2c`, the address bytes are reversed and the firmware must flip them before hashing.
+- More units, for seat-level location.
+- A cellular detector, for phones with Bluetooth off.
 
-The server test `test_shared_hash_vector` checks the same values. If you change them, change both.
+## Privacy and responsible use
+
+- **Receive only.** The unit listens. It never transmits to jam, block or interfere with any signal, and this project will not accept code that does.
+- **Addresses are hashed.** Every Bluetooth address is salted and hashed (SHA-256, first 12 hex characters) before it touches disk or reaches the dashboard. Raw MAC addresses, audio and packet contents are never stored. See [address hashing](docs/hashing.md).
+- **Raw captures stay on the laptop.** `data/raw/` is gitignored. Only anonymized samples are shared.
+- **Get permission.** Use Invigil only with the permission of whoever runs the exam, and tell the people in the hall. Do not use it to watch people anywhere else.
+- **Follow the law.** Radio monitoring and data protection rules differ between countries. Check the radio and privacy law where you are before you switch it on.
+- **It is a detector, not a verdict.** A detection means a radio signal was heard. It does not prove anyone cheated. A person must check before anyone is accused.
+
+To report a privacy or security problem, see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) first. To cite the project, use [CITATION.cff](CITATION.cff).
+
+## Team
+
+Team 12323, Alexandria STEM School, Egypt. Grade 12 capstone, 2026-2027.
+
+- Mohanad Tarek
+- Ahmed Khalifa
+- Ali Hamdeen
+
+## Acknowledgements
+
+To be added: teachers, mentors and everyone who lent a device for testing.
+
+## License
+
+- **Code:** [MIT](LICENSE).
+- **Documentation and images in `docs/`:** [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+- **The Invigil name and logo:** covered by neither license. You may show them when referring to Invigil. Please do not use them for your own product. See the [brand notes](docs/brand/README.md).
