@@ -12,7 +12,8 @@ import re
 
 TOPIC_ROOT = "invigil/node"
 SUBSCRIPTION = f"{TOPIC_ROOT}/+/+"
-NODE_IDS = ("N1", "N2", "N3")
+# One sensor unit for now. Phase 2 adds units here; the topic format stays the same.
+NODE_IDS = ("N1",)
 NUM_CHANNELS = 126  # nRF24L01 channels 0..125, channel c is 2400 + c MHz
 
 FIELDS = {
@@ -130,9 +131,11 @@ def hash_addr(mac: str | bytes, salt: str) -> str:
     normally printed (AA:BB:CC:DD:EE:FF). Firmware must hash exactly the same
     way so hashes from nodes, the whitelist, and fake data all agree.
 
-    NimBLE stores ble_addr_t.val least significant byte first, so the firmware
-    must hash val[5], val[4], ..., val[0]. The README has a test vector for
-    checking this on the node.
+    The firmware gets addresses from BTstack. The order BTstack hands over
+    the 6 bytes is not assumed here: the firmware must reproduce the test
+    vector in the README, and that is checked on real hardware at boot. If
+    the unit prints the "wrong byte order" hash from the README instead, it
+    must reverse the bytes before hashing.
     """
     if isinstance(mac, str):
         mac = bytes.fromhex(mac.replace(":", "").replace("-", ""))

@@ -1,7 +1,7 @@
 import random
 
 from server import contract
-from server.fake_publisher import WIFI_CHANNELS, default_devices, simulate_window
+from server.fake_publisher import WIFI_CHANNELS, band_of, default_devices, simulate_window
 
 T0 = 1_790_000_000_000
 
@@ -51,3 +51,15 @@ def test_spectrum_shows_wifi_block_and_bluetooth_hopping():
     hop = sum(totals[c] for c in range(2, 27)) / 25
     above_bt = sum(totals[c] for c in range(81, 126)) / 45  # no Bluetooth up here
     assert wifi > hop > above_bt
+
+
+def test_band_edges_match_the_data_protocol():
+    assert [band_of(d) for d in (0.5, 0.99, 1.0, 1.5, 2.0, 3.0, 3.49)] == [
+        "near", "near", "mid", "mid", "far", "far", "far"]
+    assert band_of(3.5) == "out of range"
+
+
+def test_every_device_has_a_type_and_a_band():
+    devices = default_devices("test-salt", random.Random(1))
+    assert {d.kind for d in devices} == {"phone", "earpiece", "smartwatch", "allowed"}
+    assert {d.band for d in devices} == {"near", "mid", "far"}

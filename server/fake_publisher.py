@@ -1,4 +1,4 @@
-"""Fake node publisher: three simulated nodes that follow the MQTT contract.
+"""Fake publisher: one simulated sensor unit (N1) that follows the MQTT contract.
 
 Use it to build and test the logger, dashboard, and ML pipeline before the
 hardware is ready. Run from the repo root:
@@ -6,7 +6,7 @@ hardware is ready. Run from the repo root:
 
 The data has the right shape, not the right physics. Every number in the
 PLACEHOLDERS section is a guess. Replace them with calibration results from
-docs/results/ once the real nodes are running, and never train the final
+docs/results/ once the real unit is running, and never train the final
 models on fake data.
 """
 
@@ -36,22 +36,23 @@ log = logging.getLogger("invigil.fake")
 
 FAKE_FW = "0.1.0-fake"  # shows up in status.csv, so fake runs are easy to spot
 
+# Distance bands from docs/data-protocol.md: (name, upper edge in metres).
+BANDS = (("near", 1.0), ("mid", 2.0), ("far", 3.5))
+
 # ---------------------------------------------------------------------------
 # PLACEHOLDERS. None of these are measured yet.
 # ---------------------------------------------------------------------------
 
-# Hall layout in metres: two rows of three seats, one node on each of three sides.
-SEATS = {
-    "S1": (0.8, 1.0), "S2": (2.0, 1.0), "S3": (3.2, 1.0),
-    "S4": (0.8, 2.2), "S5": (2.0, 2.2), "S6": (3.2, 2.2),
-}
-NODE_POSITIONS = {"N1": (0.0, 0.0), "N2": (4.0, 0.0), "N3": (2.0, 3.2)}
+# The unit sits at the edge of the 6-seat hall. Each fake device is placed at a
+# straight-line distance from it, in metres. The distances in default_devices()
+# are guesses at how far a seat or the front desk would be.
+MIN_DISTANCE_M = 0.3  # log-distance model breaks down very close in
 
 PATH_LOSS_EXP = 2.2  # indoor log-distance exponent
 PATH_LOSS_1M_DB = 40.0  # free-space loss at 1 m and 2.4 GHz
 RSSI_NOISE_DB = 4.0  # packet-to-packet fading, standard deviation
-BLE_SENSITIVITY_DBM = -92  # weakest advertisement a node still decodes
-BLE_CATCH_RATE = 0.6  # share of in-range advertisements a node actually catches
+BLE_SENSITIVITY_DBM = -92  # weakest advertisement the unit still decodes
+BLE_CATCH_RATE = 0.6  # share of in-range advertisements the unit actually catches
 RPD_THRESHOLD_DBM = -64  # nRF24L01 RPD trips above this (datasheet value)
 BODY_LOSS_DB = 8.0  # extra loss for a device in an ear or a pocket
 HOP_BUSY = 0.015  # chance a hop channel is in use at the instant it is sampled
@@ -72,29 +73,20 @@ class Device:
     adv_interval_ms: int | None  # None means the device is not advertising
     rssi_1m: float  # BLE RSSI seen at 1 m, dBm
     audio_tx_dbm: float | None  # Bluetooth audio link power, None if not streaming
-    where: Callable[[float], tuple[float, float]]  # seconds since epoch -> (x, y)
+    distance_m: float  # straight-line distance from the unit
     adv_phase_ms: float = 0.0
 
+    @property
+    def band(self) -> str:
+        return band_of(self.distance_m)
 
-def fixed(pos: tuple[float, float]) -> Callable[[float], tuple[float, float]]:
-    return lambda t: pos
 
-
-def patrol(points: list[tuple[float, float]], speed_mps: float) -> Callable[[float], tuple[float, float]]:
-    """Walk a closed loop through the points at constant speed."""
-    legs = [(a, b, math.dist(a, b)) for a, b in zip(points, points[1:] + points[:1])]
-    loop_m = sum(length for _, _, length in legs)
-
-    def where(t: float) -> tuple[float, float]:
-        s = (t * speed_mps) % loop_m
-        for a, b, length in legs:
-            if s <= length:
-                f = s / length
-                return (a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]))
-            s -= length
-        return points[0]
-
-    return where
+def band_of(distance_m: float) -> str:
+    """Distance band for a distance from the unit. An edge belongs to the farther band."""
+    for name, upper in BANDS:
+        if distance_m < upper:
+            return name
+    return "out of range"
 
 
 def default_devices(salt: str, rng: random.Random) -> list[Device]:
@@ -102,17 +94,16 @@ def default_devices(salt: str, rng: random.Random) -> list[Device]:
         return contract.hash_addr(rng.randbytes(6), salt)
 
     devices = [
-        Device("phone in a pocket, seat S2", "phone", addr(), "0x004C",
-               adv_interval_ms=300, rssi_1m=-62, audio_tx_dbm=None, where=fixed(SEATS["S2"])),
+        Device("phone in a pocket", "phone", addr(), "0x004C",
+               adv_interval_ms=300, rssi_1m=-62, audio_tx_dbm=None, distance_m=1.5),
         # Many earpieces stop advertising once connected, so this one is silent
         # on BLE and only the spectrum scan can see it. Verify with the real earpiece.
-        Device("earpiece streaming audio, seat S5", "earpiece", addr(), "0x0075",
-               adv_interval_ms=None, rssi_1m=-68, audio_tx_dbm=0.0, where=fixed(SEATS["S5"])),
-        Device("smartwatch on a wrist, seat S4", "smartwatch", addr(), "0x00E0",
-               adv_interval_ms=1000, rssi_1m=-64, audio_tx_dbm=None, where=fixed(SEATS["S4"])),
-        Device("proctor phone, walking the room", "allowed", addr(), "0x0075",
-               adv_interval_ms=500, rssi_1m=-59, audio_tx_dbm=None,
-               where=patrol([(0.3, 0.4), (3.7, 0.4), (3.7, 2.8), (0.3, 2.8)], speed_mps=0.5)),
+        Device("earpiece streaming audio", "earpiece", addr(), "0x0075",
+               adv_interval_ms=None, rssi_1m=-68, audio_tx_dbm=0.0, distance_m=0.5),
+        Device("smartwatch on a wrist", "smartwatch", addr(), "0x00E0",
+               adv_interval_ms=1000, rssi_1m=-64, audio_tx_dbm=None, distance_m=3.0),
+        Device("proctor phone on the front desk", "allowed", addr(), "0x0075",
+               adv_interval_ms=500, rssi_1m=-59, audio_tx_dbm=None, distance_m=2.5),
     ]
     for d in devices:
         if d.adv_interval_ms:
@@ -120,8 +111,9 @@ def default_devices(salt: str, rng: random.Random) -> list[Device]:
     return devices
 
 
-def distance(a: tuple[float, float], b: tuple[float, float]) -> float:
-    return max(math.dist(a, b), 0.3)  # log-distance model breaks down very close in
+def path_loss_db(distance_m: float) -> float:
+    """Loss beyond the 1 m reference, log-distance model."""
+    return 10 * PATH_LOSS_EXP * math.log10(max(distance_m, MIN_DISTANCE_M))
 
 
 def either(p: float, q: float) -> float:
@@ -129,8 +121,7 @@ def either(p: float, q: float) -> float:
     return 1 - (1 - p) * (1 - q)
 
 
-def spectrum_hits(here: tuple[float, float], t_ms: float, devices: list[Device],
-                  sweeps: int, rng: random.Random) -> list[int]:
+def spectrum_hits(devices: list[Device], sweeps: int, rng: random.Random) -> list[int]:
     p = [NOISE_HIT_RATE] * contract.NUM_CHANNELS
     # Wi-Fi: a fixed block of busy channels.
     for c in WIFI_CHANNELS:
@@ -141,8 +132,7 @@ def spectrum_hits(here: tuple[float, float], t_ms: float, devices: list[Device],
     for dev in devices:
         if dev.audio_tx_dbm is None:
             continue
-        loss = PATH_LOSS_1M_DB + 10 * PATH_LOSS_EXP * math.log10(distance(here, dev.where(t_ms / 1000)))
-        rx_dbm = dev.audio_tx_dbm - BODY_LOSS_DB - loss
+        rx_dbm = dev.audio_tx_dbm - BODY_LOSS_DB - PATH_LOSS_1M_DB - path_loss_db(dev.distance_m)
         above = 1 / (1 + math.exp(-(rx_dbm - RPD_THRESHOLD_DBM) / 3))  # soft threshold for fading
         for c in hop_set:
             p[c] = either(p[c], HOP_BUSY * above)
@@ -151,12 +141,11 @@ def spectrum_hits(here: tuple[float, float], t_ms: float, devices: list[Device],
 
 def simulate_window(node: str, t0: int, t1: int, devices: list[Device],
                     sweeps: int, rng: random.Random) -> list[tuple[str, dict]]:
-    """Messages one node sends after scanning from t0 to t1 (ms since epoch).
+    """Messages the unit sends after scanning from t0 to t1 (ms since epoch).
 
     BLE readings carry the time each advertisement was heard. The spectrum
     message covers the whole scan window and carries its end time.
     """
-    here = NODE_POSITIONS[node]
     ble = []
     for dev in devices:
         if dev.adv_interval_ms is None:
@@ -168,15 +157,14 @@ def simulate_window(node: str, t0: int, t1: int, devices: list[Device],
             if t >= t1:
                 break  # anything later falls in the send window and is dropped
             k += 1
-            d = distance(here, dev.where(t / 1000))
-            rssi = dev.rssi_1m - 10 * PATH_LOSS_EXP * math.log10(d) + rng.gauss(0, RSSI_NOISE_DB)
+            rssi = dev.rssi_1m - path_loss_db(dev.distance_m) + rng.gauss(0, RSSI_NOISE_DB)
             if rssi < BLE_SENSITIVITY_DBM or rng.random() > BLE_CATCH_RATE:
                 continue
             ble.append({"ts": int(t), "node": node, "addr": dev.addr,
                         "rssi": max(-127, min(0, round(rssi))), "mfr": dev.mfr})
     ble.sort(key=lambda m: m["ts"])
     msgs = [("ble", m) for m in ble]
-    hits = spectrum_hits(here, (t0 + t1) / 2, devices, sweeps, rng)
+    hits = spectrum_hits(devices, sweeps, rng)
     msgs.append(("spectrum", {"ts": t1, "node": node, "sweeps": sweeps, "hits": hits}))
     return msgs
 
@@ -195,11 +183,10 @@ def now_ms() -> int:
 
 def run(send: Callable[[str, dict], None], devices: list[Device], scan_ms: int, send_ms: int,
         sweeps: int, duration_s: float, rng: random.Random, status_every_s: int = 10) -> None:
-    """Drive the three nodes on alternating scan and send windows until time runs out."""
+    """Drive the unit on alternating scan and send windows until time runs out."""
     cycle = scan_ms + send_ms
     start = now_ms()
     nodes = [
-        # Nodes boot at different times, so their windows are not aligned.
         SimNode(nid, scan_start=start + rng.randrange(cycle),
                 boot_ms=start - rng.randrange(60_000, 600_000), next_status=start)
         for nid in contract.NODE_IDS
@@ -237,7 +224,7 @@ def run(send: Callable[[str, dict], None], devices: list[Device], scan_ms: int, 
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Publish fake node readings that follow the MQTT contract.")
+    parser = argparse.ArgumentParser(description="Publish fake sensor unit readings that follow the MQTT contract.")
     parser.add_argument("--config", type=Path, help="config file (default: server/config.toml if present)")
     parser.add_argument("--host", help="broker host (overrides config)")
     parser.add_argument("--port", type=int, help="broker port (overrides config)")
@@ -247,7 +234,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--send-ms", type=int, default=200, help="send window length (default: 200)")
     parser.add_argument("--sweeps", type=int, default=20,
                         help="channel sweeps per spectrum message (default: 20, a guess of about "
-                             "40 ms per 126-channel sweep in an 800 ms window; measure on a real node)")
+                             "40 ms per 126-channel sweep in an 800 ms window; measure on the real unit)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
@@ -286,12 +273,12 @@ def main(argv: list[str] | None = None) -> None:
         contract.validate(kind, payload, payload["node"])  # never publish anything off-contract
         client.publish(contract.topic(payload["node"], kind), json.dumps(payload, separators=(",", ":")))
 
-    log.info("fake nodes %s publishing to %s:%d (scan %d ms, send %d ms, %d sweeps)",
+    log.info("fake unit %s publishing to %s:%d (scan %d ms, send %d ms, %d sweeps)",
              ", ".join(contract.NODE_IDS), host, port, args.scan_ms, args.send_ms, args.sweeps)
     log.info("ground truth for this run:")
     for d in devices:
         note = "" if d.adv_interval_ms else "  (not advertising, spectrum only)"
-        log.info("  %s  %-10s  %s%s", d.addr, d.kind, d.label, note)
+        log.info("  %s  %-10s  %-4s (%.1f m)  %s%s", d.addr, d.kind, d.band, d.distance_m, d.label, note)
 
     try:
         run(send, devices, args.scan_ms, args.send_ms, args.sweeps, args.duration, rng)

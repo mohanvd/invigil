@@ -17,13 +17,13 @@ def make_recorder(tmp_path):
 
 def test_valid_ble_is_written_with_rx_ts(tmp_path):
     rec = make_recorder(tmp_path)
-    msg = {"ts": TS, "node": "N2", "addr": "a91f03c2d4e8", "rssi": -58, "mfr": "0x004C"}
-    assert rec.handle("invigil/node/N2/ble", json.dumps(msg).encode(), TS + 400)
+    msg = {"ts": TS, "node": "N1", "addr": "a91f03c2d4e8", "rssi": -58, "mfr": "0x004C"}
+    assert rec.handle("invigil/node/N1/ble", json.dumps(msg).encode(), TS + 400)
     rec.close()
 
     rows = read_csv(tmp_path / "session" / "ble.csv")
     assert rows[0] == COLUMNS["ble"]
-    assert rows[1] == [str(TS + 400), str(TS), "N2", "a91f03c2d4e8", "-58", "0x004C"]
+    assert rows[1] == [str(TS + 400), str(TS), "N1", "a91f03c2d4e8", "-58", "0x004C"]
 
 
 def test_null_mfr_is_an_empty_cell(tmp_path):
@@ -37,8 +37,8 @@ def test_null_mfr_is_an_empty_cell(tmp_path):
 def test_spectrum_gets_one_column_per_channel(tmp_path):
     rec = make_recorder(tmp_path)
     hits = list(range(126))
-    msg = {"ts": TS, "node": "N3", "sweeps": 200, "hits": hits}
-    assert rec.handle("invigil/node/N3/spectrum", json.dumps(msg).encode(), TS)
+    msg = {"ts": TS, "node": "N1", "sweeps": 200, "hits": hits}
+    assert rec.handle("invigil/node/N1/spectrum", json.dumps(msg).encode(), TS)
     rec.close()
 
     header, row = read_csv(tmp_path / "session" / "spectrum.csv")
@@ -70,7 +70,6 @@ def test_report_counts_and_resets(tmp_path):
 
     line = rec.report()
     assert "N1: 1 status" in line
-    assert "N2: silent" in line
     assert "p50 30 ms" in line
     assert "rejected 1" in line
     assert "rejected 0" in rec.report()

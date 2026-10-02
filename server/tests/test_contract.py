@@ -39,6 +39,7 @@ def test_topics_round_trip():
 
 
 @pytest.mark.parametrize("name", [
+    "invigil/node/N2/ble",
     "invigil/node/N4/ble",
     "invigil/node/N1/audio",
     "invigil/node/N1",
@@ -57,7 +58,17 @@ def test_timestamp_in_seconds_gets_a_helpful_reason():
 
 def test_node_must_match_topic():
     with pytest.raises(ContractError, match="does not match"):
-        validate("ble", ble(node="N2"), "N1")
+        validate("ble", ble(), "N9")
+
+
+def test_second_node_is_rejected_until_phase_2():
+    assert contract.NODE_IDS == ("N1",)
+    with pytest.raises(ContractError, match="unknown node"):
+        contract.topic("N2", "ble")
+    with pytest.raises(ContractError, match="unknown node"):
+        contract.parse_topic("invigil/node/N2/ble")
+    with pytest.raises(ContractError, match="node must be one of"):
+        validate("ble", ble(node="N2"))
 
 
 @pytest.mark.parametrize("ts", [1727340000, 1727340000123000, -1, 1.7e12, True, "1727340000123"])
@@ -144,15 +155,15 @@ def test_hash_addr_matches_spec():
 # check its hashing and byte order. Change them in both places or neither.
 VECTOR_SALT = "invigil-test-vector"
 VECTOR_ADDR = "01:23:45:67:89:AB"
-VECTOR_NIMBLE_VAL = bytes([0xAB, 0x89, 0x67, 0x45, 0x23, 0x01])  # ble_addr_t.val, LSB first
+VECTOR_ADDR_REVERSED = bytes([0xAB, 0x89, 0x67, 0x45, 0x23, 0x01])  # same address, LSB first
 VECTOR_HASH = "41239c0be85e"
-VECTOR_HASH_REVERSED = "5cebc32cde2c"  # what you get if val[] is hashed without reversing
+VECTOR_HASH_REVERSED = "5cebc32cde2c"  # what you get if the bytes are hashed LSB first
 
 
 def test_shared_hash_vector():
     assert contract.hash_addr(VECTOR_ADDR, VECTOR_SALT) == VECTOR_HASH
-    assert contract.hash_addr(VECTOR_NIMBLE_VAL[::-1], VECTOR_SALT) == VECTOR_HASH
-    assert contract.hash_addr(VECTOR_NIMBLE_VAL, VECTOR_SALT) == VECTOR_HASH_REVERSED
+    assert contract.hash_addr(VECTOR_ADDR_REVERSED[::-1], VECTOR_SALT) == VECTOR_HASH
+    assert contract.hash_addr(VECTOR_ADDR_REVERSED, VECTOR_SALT) == VECTOR_HASH_REVERSED
 
 
 def test_hash_addr_rejects_wrong_length():

@@ -1,6 +1,0 @@
-# ESP-IDF 6 ships the MQTT client as a separate component from the
-# ESP Component Registry. The build downloads it into managed_components/
-# and pins the exact version in dependencies.lock (committed).
-dependencies:
-  idf: ">=6.1"
-  espressif/mqtt: "^1.0.0"
