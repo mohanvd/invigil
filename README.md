@@ -190,6 +190,30 @@ Every live message is checked the same way `server/contract.py` checks it: a 12-
 
 To read the dashboard from a phone on the same network, run `pnpm dev --host` and use the laptop's IP address in both the page URL and the broker URL.
 
+### Public demo build
+
+Setting `VITE_DEMO_ONLY=true` at build time makes a demo-only dashboard for the public site. It always uses the Demo source, hides the Demo and Live switch and the broker fields in Settings, keeps the "Demo data" badge, and adds a notice at the top that links to invigil.xyz and this repo. Without the variable, nothing changes. Only the exact value `true` turns it on.
+
+To try it locally:
+
+```powershell
+$env:VITE_DEMO_ONLY = "true"
+pnpm dev
+```
+
+Vercel project settings:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `dashboard` |
+| Framework Preset | Vite |
+| Build Command | `pnpm build` |
+| Output Directory | `dist` |
+| Environment Variable | `VITE_DEMO_ONLY` = `true` |
+| Ignored Build Step | `git diff HEAD^ HEAD --quiet -- .` |
+
+The ignored build step runs inside the root directory, so a commit that does not touch `dashboard/` skips the deploy.
+
 ### Checks
 
 CI runs the same four commands in `dashboard/`:
