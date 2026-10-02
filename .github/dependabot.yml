@@ -2,6 +2,9 @@ version: 2
 updates:
   - package-ecosystem: pip
     directory: /
+    # Only raise a minimum version when the current range excludes the new
+    # release. Without this, every release bumps the floor in requirements.txt.
+    versioning-strategy: increase-if-necessary
     schedule:
       interval: monthly
     commit-message:
