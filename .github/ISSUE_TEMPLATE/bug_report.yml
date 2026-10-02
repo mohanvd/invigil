@@ -1,0 +1,64 @@
+name: Bug report
+description: Something does not work as documented
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not paste raw MAC addresses, salts, passwords or raw captures here.
+        For a privacy or security problem, do not open an issue. Follow SECURITY.md instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Logger
+        - Fake publisher
+        - ML pipeline
+        - Firmware
+        - Dashboard
+        - Simulation
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands you ran, from the repo root.
+      placeholder: |
+        1. python -m server.logger --session test
+        2. python -m server.fake_publisher --seed 1
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or error message
+      description: Paste the relevant lines. Check them for secrets first.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, Mosquitto version.
+      placeholder: Windows 11, Python 3.12, Mosquitto 2.0
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This report contains no raw MAC addresses, salts, credentials or raw captures.
+          required: true

@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest an idea or an improvement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Invigil is receive only and keeps its models narrow (device type and distance band).
+        Requests to transmit, jam or store raw addresses will be closed.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways to solve it that you considered.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Logger
+        - Fake publisher
+        - ML pipeline
+        - Firmware
+        - Dashboard
+        - Simulation
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware assumptions
+      description: Does this depend on real hardware behavior (range, thresholds, timing)? If so, what test would confirm it?
