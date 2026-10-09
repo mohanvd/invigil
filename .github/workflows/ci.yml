@@ -72,12 +72,98 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # Firmware build job goes here once firmware/ has a CMake project.
-  # Plan: install the Arm GNU toolchain and CMake, fetch the Pico SDK,
-  # then configure with -DPICO_BOARD=pico2_w and build firmware/.
-  #
-  # firmware:
-  #   name: Firmware build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v7
+  firmware:
+    name: Firmware
+    runs-on: ubuntu-latest
+    env:
+      # SHA-256 of each Arm GNU Toolchain archive, from the .sha256asc file Arm
+      # publishes next to the download. The version in use is toolchainVersion
+      # in firmware/CMakeLists.txt; add a line here when it changes.
+      ARM_TOOLCHAIN_SHA256_15_2_Rel1: 597893282ac8c6ab1a4073977f2362990184599643b4c5ee34870a8215783a16
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Host tests
+        run: |
+          cmake -S firmware/tests -B firmware/build/tests -DINVIGIL_SANITIZE=ON
+          cmake --build firmware/build/tests
+          ctest --test-dir firmware/build/tests --output-on-failure
+
+      - name: Check firmware payloads against the contract
+        run: python firmware/tests/check_contract.py firmware/build/tests/samples.tsv
+
+      - name: Check firmware rules
+        run: |
+          # The capstone bans Arduino, so the word must not appear in firmware/.
+          if grep -rIil arduino firmware; then
+            echo "::error::firmware/ mentions Arduino"
+            exit 1
+          fi
+          # The raw-address debug flag must be off in committed code.
+          if ! grep -q '^#define INVIGIL_DEBUG_RAW_ADDR 0$' firmware/src/config.h; then
+            echo "::error::INVIGIL_DEBUG_RAW_ADDR must be 0 in firmware/src/config.h"
+            exit 1
+          fi
+
+      - name: Read pinned versions
+        id: pins
+        run: |
+          sdk=$(sed -n 's/^set(sdkVersion \(.*\))$/\1/p' firmware/CMakeLists.txt)
+          toolchain=$(sed -n 's/^set(toolchainVersion \(.*\))$/\1/p' firmware/CMakeLists.txt)
+          if [ -z "$sdk" ] || [ -z "$toolchain" ]; then
+            echo "::error::sdkVersion or toolchainVersion not found in firmware/CMakeLists.txt"
+            exit 1
+          fi
+          echo "Pico SDK $sdk, Arm GNU Toolchain $toolchain"
+          echo "sdk=$sdk" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+
+      - name: Install the Arm GNU Toolchain
+        env:
+          TOOLCHAIN: ${{ steps.pins.outputs.toolchain }}
+        run: |
+          sha_var="ARM_TOOLCHAIN_SHA256_${TOOLCHAIN}"
+          expected="${!sha_var}"
+          if [ -z "$expected" ]; then
+            echo "::error::No checksum for toolchain $TOOLCHAIN. Add $sha_var to the firmware job in ci.yml."
+            exit 1
+          fi
+          version="${TOOLCHAIN//_/.}"
+          version="${version,,}"  # 15_2_Rel1 -> 15.2.rel1
+          archive="arm-gnu-toolchain-${version}-x86_64-arm-none-eabi.tar.xz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://armkeil.blob.core.windows.net/developer/files/downloads/gnu/${version}/binrel/${archive}"
+          echo "${expected}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/arm-toolchain"
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/arm-toolchain" --strip-components=1
+          echo "$RUNNER_TEMP/arm-toolchain/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/arm-toolchain/bin/arm-none-eabi-gcc" --version
+
+      - name: Fetch the Pico SDK
+        env:
+          SDK_VERSION: ${{ steps.pins.outputs.sdk }}
+        run: |
+          git clone --depth 1 --branch "$SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git "$RUNNER_TEMP/pico-sdk"
+          git -C "$RUNNER_TEMP/pico-sdk" submodule update --init --depth 1
+          git -C "$RUNNER_TEMP/pico-sdk" submodule status
+
+      - name: Build for pico2_w
+        env:
+          PICO_SDK_PATH: ${{ runner.temp }}/pico-sdk
+        run: |
+          # Placeholder secrets: this checks that the firmware builds. Flash a
+          # build made with your own firmware/secrets.h instead.
+          cp firmware/secrets.h.example firmware/secrets.h
+          cmake -S firmware -B firmware/build -DPICO_BOARD=pico2_w -DCMAKE_BUILD_TYPE=Release
+          cmake --build firmware/build -j "$(nproc)"
+          ls -l firmware/build/invigil.uf2
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: invigil-uf2-placeholder-secrets
+          path: firmware/build/invigil.uf2
+          if-no-files-found: error
