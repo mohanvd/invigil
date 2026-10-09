@@ -3,6 +3,13 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#include "config.h"
+
+// lwIP's mqtt.h defines its own MQTT_PORT (the standard 1883). Keep the port
+// from secrets.h under another name so lwIP's cannot replace it.
+enum { BROKER_PORT = MQTT_PORT };
+#undef MQTT_PORT
+
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 
@@ -10,8 +17,6 @@
 #include "lwip/apps/mqtt_priv.h"  // the client struct, to allocate it statically and read its queue
 #include "lwip/ip_addr.h"
 #include "lwip/tcp.h"
-
-#include "config.h"
 
 #if LWIP_ALTCP
 #error "mqtt_link reads the TCP send queue directly and needs LWIP_ALTCP 0"
@@ -78,10 +83,10 @@ static void schedule_retry(void) {
 }
 
 static void start_connect(void) {
-    printf("mqtt: connecting to %s:%d as %s\n", MQTT_HOST, MQTT_PORT, client_id);
+    printf("mqtt: connecting to %s:%d as %s\n", MQTT_HOST, BROKER_PORT, client_id);
     cyw43_arch_lwip_begin();
     status_pending = false;
-    err_t err = mqtt_client_connect(&client, &broker, MQTT_PORT, on_connection, NULL, &client_info);
+    err_t err = mqtt_client_connect(&client, &broker, BROKER_PORT, on_connection, NULL, &client_info);
     cyw43_arch_lwip_end();
     if (err != ERR_OK) {
         printf("mqtt: could not start connecting (lwIP error %d)\n", err);

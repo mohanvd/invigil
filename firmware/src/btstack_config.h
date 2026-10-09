@@ -11,6 +11,9 @@
 
 #define ENABLE_LE_CENTRAL
 #define ENABLE_LOG_ERROR
+// The Pico SDK always compiles BTstack's HCI dump to stdout, which needs this.
+// HCI dumps stay off (WANT_HCI_DUMP is not set).
+#define ENABLE_PRINTF_HEXDUMP
 
 // Buffers
 #define HCI_OUTGOING_PRE_BUFFER_SIZE 4
