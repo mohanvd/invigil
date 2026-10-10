@@ -54,7 +54,11 @@ What works today, on a laptop with no hardware:
 - **Dashboard** (`dashboard/`): the web app, with a Demo source that needs no broker and a Live source that reads Mosquitto over WebSockets. Alerts and sessions only exist in Demo so far, and no test results exist at all. See [Dashboard](#dashboard).
 - **Tests** for the contract, the logger, the fake publisher, the ML pipeline and the dashboard's data layer.
 
-Not started: the firmware and the digital twin.
+Written but not tested on hardware:
+
+- **Firmware** (`firmware/`): the unit code for the Pico 2 W. It builds in CI and its hardware-free parts pass host tests, but it has never run on a real board. See [Unit firmware](docs/firmware.md).
+
+Not started: the digital twin.
 
 ## Hardware
 
@@ -62,30 +66,49 @@ Not started: the firmware and the digital twin.
 | --- | --- | --- | --- |
 | Raspberry Pi Pico 2 W (RP2350 + CYW43439) | 1 | Main board, BLE scanner, Wi-Fi | 1,050 (Dev Boards Market) |
 | nRF24L01+PA+LNA module with antenna | 1 | 2.4 GHz channel scanner, receive only | 220 (Makers Electronics) |
-| 100 uF electrolytic capacitor | 1 | Steadies the radio's supply | 1 |
+| nRF24L01 adapter board with 3.3 V regulator (AMS1117-3.3) | 1 | Powers the radio from the Pico's 5 V | 30 (Makers Electronics) |
+| 100 uF 25 V electrolytic capacitor | 1 | Steadies the radio's supply | 1 |
 | Breadboard (830 points) and 20 jumper wires | 1 set | Wiring | 50 |
 | 1x40 male pin header | 2 | Soldered to the Pico so it plugs into the breadboard | 10 |
 | Micro USB cable | 1 | Power and flashing | Owned |
 | USB power bank | 1 | Power in the hall | Owned |
-| **Total** | | | **About 1,331** |
+| **Total** | | | **About 1,361** |
 
 Prices are store listings from October 2026, before delivery. A laptop on the same Wi-Fi network runs the broker, the logger and the models.
 
 ### Wiring
 
-Check each pin against the Pico 2 W pinout before soldering.
+Check each pin against the Pico 2 W pinout before soldering. Physical pins are counted from pin 1 at the USB end, down the left side (1 to 20), then up the right side (21 to 40).
 
-| nRF24L01+PA+LNA pin | Pico 2 W pin |
-| --- | --- |
-| VCC | 3V3(OUT). Never 5 V |
-| GND | GND |
-| SCK | GP18 (SPI0) |
-| MOSI | GP19 (SPI0) |
-| MISO | GP16 (SPI0) |
-| CSN | GP17 |
-| CE | GP20 |
+**Bare module**, wired straight to the Pico:
 
-Put a 100 uF capacitor across the radio's VCC and GND, close to the module.
+| nRF24L01+PA+LNA pin | Pico 2 W pin | Physical pin |
+| --- | --- | --- |
+| VCC | 3V3(OUT). Never 5 V | 36 |
+| GND | GND | 23 |
+| SCK | GP18 (SPI0) | 24 |
+| MOSI | GP19 (SPI0) | 25 |
+| MISO | GP16 (SPI0) | 21 |
+| CSN | GP17 | 22 |
+| CE | GP20 | 26 |
+| IRQ | Not connected | |
+
+Put a 100 uF 25 V capacitor across the radio's VCC and GND, close to the module.
+
+**With the adapter board.** The radio plugs into the adapter. The adapter has its own 3.3 V regulator, so its VCC goes to VBUS, the 5 V from USB. The signal pins are the same as for the bare module.
+
+| Adapter pin | Pico 2 W pin | Physical pin |
+| --- | --- | --- |
+| VCC | VBUS (5 V from USB) | 40 |
+| GND | GND | 23 |
+| SCK | GP18 (SPI0) | 24 |
+| MOSI | GP19 (SPI0) | 25 |
+| MISO | GP16 (SPI0) | 21 |
+| CSN | GP17 | 22 |
+| CE | GP20 | 26 |
+| IRQ | Not connected | |
+
+VBUS only has power when the Pico is powered through its USB port, which is the case with the laptop or the power bank.
 
 ## Quick start
 
