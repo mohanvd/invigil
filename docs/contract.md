@@ -15,6 +15,8 @@ invigil/node/{node_id}/status
 
 `mfr` is the Bluetooth SIG company ID as `"0x"` plus 4 uppercase hex digits, or `null` when the advertisement carries no manufacturer data.
 
+`ts` in a spectrum message is the end of the scan window its sweeps came from.
+
 The unit must not scan the 2.4 GHz band while it is transmitting over Wi-Fi. Scan windows and send windows alternate, and readings taken during a send window are dropped.
 
 The topic keeps the `{node_id}` level so more units can be added in Phase 2 without changing the format.
