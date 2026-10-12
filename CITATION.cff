@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use Invigil, please cite it using this file."
 type: software
-title: "Invigil: passive wireless detection of hidden cheating devices in exam halls"
+title: "Invigil: Passive wireless detection of hidden cheating devices in exam halls"
 abstract: >-
   Invigil detects hidden phones, Bluetooth earpieces and smartwatches in exam
   halls by listening passively to the 2.4 GHz band. One Raspberry Pi Pico 2 W
@@ -29,7 +29,7 @@ keywords:
   - exam-integrity
 preferred-citation:
   type: software
-  title: "Invigil: passive wireless detection of hidden cheating devices in exam halls"
+  title: "Invigil: Passive wireless detection of hidden cheating devices in exam halls"
   authors:
     - given-names: Ahmed
       family-names: Khalifa
