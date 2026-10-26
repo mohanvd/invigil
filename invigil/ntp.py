@@ -6,10 +6,12 @@ laptop clock has to be right too before any latency number means anything.
 
 from __future__ import annotations
 
+import json
 import socket
 import struct
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_SERVER = "pool.ntp.org"
 WARN_MS = 100
@@ -75,6 +77,25 @@ class ClockCheck:
         if not self.ok:
             text += f". WARNING: more than {WARN_MS} ms off, latency results are not valid. {SYNC_HELP}"
         return text
+
+
+def record(folder: Path, when: str, check: ClockCheck, now: float | None = None) -> Path:
+    """Add one clock measurement to <session folder>/clock.json under "start" or "stop".
+
+    laptop_minus_ntp_ms is how far the laptop clock (rx_ts) was ahead of NTP.
+    Subtract it from rx_ts - ts to correct a latency figure.
+    """
+    path = Path(folder) / "clock.json"
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data[when] = {
+        "measured_at_ms": int((time.time() if now is None else now) * 1000),
+        "server": check.server,
+        "laptop_minus_ntp_ms": None if check.offset_ms is None else round(-check.offset_ms, 1),
+        "error": check.error,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def check_clock(server: str = DEFAULT_SERVER, port: int = 123, timeout: float = 2.0) -> ClockCheck:

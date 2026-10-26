@@ -153,6 +153,7 @@ Each session folder holds three CSV files, one per message type:
 
 - `ts` is when the unit took the reading. `rx_ts` is when the laptop received it. Both are milliseconds since epoch, so `rx_ts - ts` is the unit-to-laptop latency (design requirement 4). The two clocks are only as close as SNTP keeps them, so check the clock offset before you report a latency result. A negative latency means the unit clock is ahead.
 - Fake runs show `fw` as `0.1.0-fake` in `status.csv`.
+- A session started by `invigil start` also gets `clock.json`: the laptop clock against NTP when the recording started, and again when `invigil stop` ended it. `laptop_minus_ntp_ms` is how far `rx_ts` ran ahead of real time, so subtract it from `rx_ts - ts` before you report a latency. `null` means the NTP server could not be reached.
 - Files are flushed after every row, so a crash or Ctrl+C loses nothing.
 
 Load a session with pandas:

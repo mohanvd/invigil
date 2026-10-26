@@ -1,3 +1,4 @@
+import json
 import socket
 import threading
 import time
@@ -68,6 +69,21 @@ def test_a_reply_that_is_not_from_a_server_is_refused():
     check = ntp.check_clock("127.0.0.1", fake_server(skew_s=0.0, mode=3))
     assert check.offset_ms is None
     assert "could not reach" in check.describe()
+
+
+def test_clock_is_recorded_next_to_the_session(tmp_path):
+    folder = tmp_path / "2026-10-26-live-120000"
+    ntp.record(folder, "start", ntp.ClockCheck("pool.ntp.org", -350.0), now=1000.0)
+    ntp.record(folder, "stop", ntp.ClockCheck("pool.ntp.org", None, "timed out"), now=1600.0)
+    data = json.loads((folder / "clock.json").read_text())
+    # offset_ms is NTP minus laptop, so a laptop 350 ms ahead stores +350.
+    assert data["start"] == {
+        "measured_at_ms": 1_000_000,
+        "server": "pool.ntp.org",
+        "laptop_minus_ntp_ms": 350.0,
+        "error": "",
+    }
+    assert data["stop"]["laptop_minus_ntp_ms"] is None and data["stop"]["error"] == "timed out"
 
 
 def test_no_answer_gives_an_unknown_offset():
