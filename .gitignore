@@ -11,6 +11,9 @@ data/raw/*
 # Fake sessions from ml/synth.py, regenerate any time.
 data/synthetic/
 
+# Launcher run state: PIDs, logs, calibration progress.
+.invigil/
+
 # Python
 __pycache__/
 *.py[cod]
