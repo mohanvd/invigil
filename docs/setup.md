@@ -84,6 +84,63 @@ The unit connects to the laptop over Wi-Fi, so the broker must listen on the net
 4. If Windows Firewall asks, allow Mosquitto on private networks.
 5. Start the logger as above.
 
+## The launcher: everything from one command
+
+Once the one-time setup and the broker setup above are done, the launcher starts and stops the whole laptop side. Run it from the repo root, or double-click `invigil.bat`:
+
+```powershell
+python -m invigil start
+```
+
+| Command | What it does |
+| --- | --- |
+| `start` | Starts Mosquitto with `server/mosquitto.conf`, the logger (session `live-<time>`, or `--session NAME`) and the dashboard on `http://127.0.0.1:8080`. Waits for the unit's first status message, opens the dashboard in Live mode, then shows the status screen |
+| `stop` | Stops only the processes `start` started |
+| `status` | Listens for 12 s, then prints the status screen once. Starts nothing |
+| `calibrate` | Guided calibration run, see below |
+| `shortcut` | Puts an Invigil shortcut on the Windows desktop that runs `invigil start` |
+
+`invigil.bat start`, `invigil.bat stop` and so on work the same way. The batch file uses `.venv` if it exists.
+
+What `start` checks first:
+
+- `server/config.toml` has the MQTT login and `server/mosquitto.passwd` exists.
+- Ports 1883 and 9001 are free. If the Windows Mosquitto service holds them, it says so and prints the administrator command (`net stop mosquitto`). It never stops the service itself.
+- The laptop clock against `pool.ntp.org` (change it with `--ntp-server`). More than 100 ms off prints a warning, because latency (`rx_ts - ts`) compares the laptop clock with the unit's.
+- The dashboard build. The first time, it asks before running `pnpm install` (needs Node.js 24 and internet). After that it rebuilds only when a dashboard file changed.
+
+The dashboard is served locally over http because the hosted demo is HTTPS, and a browser will not open a plain `ws://` connection from an HTTPS page. The page opens with the broker URL and username filled in. Enter the MQTT password once in Settings: it is never put in the URL and is kept for that browser tab only.
+
+The status screen refreshes every 2 s:
+
+```
+Broker       running at localhost:1883 (started by the launcher, PID 4120)
+Logger       data/raw/2026-10-26-live-193000 (PID 4188)
+Dashboard    http://127.0.0.1:8080/?source=live&... (PID 4236)
+Unit N1      online
+Last status  uptime 22m 11s, Wi-Fi RSSI -46 dBm, fw 0.1.0, 1 s ago
+Messages     ble 35.2/s, spectrum 0.9/s, status 0.1/s, rejected 0
+Laptop clock 12 ms behind pool.ntp.org
+```
+
+The unit counts as online while a status message arrived in the last 30 s. Ctrl+C closes the screen and leaves everything running.
+
+`start` writes each process's PID and start time to `.invigil/run.json` (gitignored), and their output to `.invigil/logs/`. `stop` checks that each PID still belongs to the process it started before it ends it, so it never touches another program. It never stops anything by name.
+
+### Calibration
+
+```powershell
+python -m invigil calibrate
+```
+
+It asks for the device type, a name such as "earpiece A" (never a person's name), the state and the position. Then it steps through 0.5, 1, 1.5, 2, 2.5, 3 and 3.5 m. At each distance, place the device, press Enter, and do not touch anything for 60 s (`--seconds` changes it). Each step is its own session, `data/raw/<date>-calib-<type>-<name>-<distance>m/`, recorded with the logger's contract check. The broker must be running (`invigil start`).
+
+After the first step it shows the strongest addresses and asks you to confirm which one is the test device, then follows that hash through the later steps. If the device changes its address, it asks for the new one. Each step gets a `session.json` written the same way `ml/label.py` writes it, already filled in: the type, the band (0.5 m near; 1, 1.5 and 2 m mid; 2.5, 3 and 3.5 m far), the name as `model`, the state, the position, `distance_m`, and `"kind": "calibration"` at the top.
+
+To stop, type `q` when it asks you to place the device, or press Ctrl+C at any time. Progress is saved after every step in `.invigil/calibration-<type>-<name>.json`, so running calibrate again with the same type and name continues where it stopped. A step that was cut off halfway is moved aside to a folder ending in `-incomplete-<time>`, never mixed into the new recording. At the end it prints the readings and the median RSSI at each distance.
+
+Calibration sessions have a filled-in `session.json`, so `ml.train` uses them like any other labelled session.
+
 ## What the logger writes
 
 Each session folder holds three CSV files, one per message type:

@@ -153,6 +153,19 @@ You can run the whole laptop side with fake data and no hardware. These commands
 
    The score it prints only proves the code runs. Never report it.
 
+### One command for the real unit
+
+When the unit is on the network, the launcher runs the whole laptop side: Mosquitto with `server/mosquitto.conf`, the logger, and the dashboard on `http://127.0.0.1:8080`. It waits for the unit, opens the dashboard in Live mode and shows a status screen (broker, logger session, unit online, last status, message rates, laptop clock offset).
+
+```powershell
+python -m invigil start
+python -m invigil status
+python -m invigil stop
+python -m invigil calibrate
+```
+
+Or double-click `invigil.bat`, and run `python -m invigil shortcut` once to put it on the desktop. It needs the broker setup from [Using the real unit](docs/setup.md#using-the-real-unit) first. `calibrate` records 60 s at each distance from 0.5 to 3.5 m and labels every step. Details are in [The launcher](docs/setup.md#the-launcher-everything-from-one-command).
+
 **Linux and macOS:** use `python3 -m venv .venv` and `source .venv/bin/activate`. Install Mosquitto with your package manager (`sudo apt install mosquitto` or `brew install mosquitto`) and start it with `mosquitto -v` if it is not already running. Every `python -m ...` command is the same.
 
 More detail:
@@ -254,7 +267,8 @@ The hall size and the seat positions on the map are placeholders in `dashboard/s
 
 | Folder | What goes there |
 | --- | --- |
-| `firmware/` | Pico 2 W unit code (Pico SDK, C, CMake). Not started |
+| `firmware/` | Pico 2 W unit code (Pico SDK, C, CMake) |
+| `invigil/` | The launcher: `python -m invigil start`, `stop`, `status`, `calibrate` |
 | `server/` | MQTT logger, fake data publisher, later the dashboard API |
 | `ml/` | `features.py`, `label.py`, `train.py`, `synth.py` |
 | `data/raw/` | Recorded sessions. Gitignored, never committed |
