@@ -2,7 +2,7 @@
 
 The firmware for sensor unit N1: a Raspberry Pi Pico 2 W (RP2350 + CYW43439) with an nRF24L01+PA+LNA on SPI0.
 
-**Status: version 0.1.0 is written and builds in CI. It has not been tested on hardware.** The board has not arrived yet. Nothing below has been seen working on a real unit. Every timing value is a starting guess, and the [To measure](#to-measure) section lists what has to be checked on the board.
+**Status: version 0.1.0 runs on the real unit N1.** On the first hardware run (2026-10-26) every self-check passed, the unit published BLE, spectrum and status messages, and the logger rejected none of them ([first boot report](results/2026-10-26-first-boot/report.md)). The BTstack byte order is checked and correct ([byte-order report](results/2026-10-26-byte-order/report.md)). The timing values are still starting guesses, and the [To measure](#to-measure) section lists what is left to check on the board.
 
 - Toolchain: the official Pico SDK **2.3.1** in C with CMake, Arm GNU Toolchain **15.2.Rel1**, picotool **2.3.1**, built with the Raspberry Pi Pico VS Code extension. No Arduino, no Arduino-Pico core, no PlatformIO, no ESP code.
 - Board: `pico2_w`.
@@ -43,19 +43,19 @@ The cycle only runs while Wi-Fi is up, the clock is set by SNTP and MQTT is conn
 
 ## Build on Windows
 
-You need a Windows PC with internet access the first time. The Pico VS Code extension downloads the SDK, the compiler, CMake, Ninja and picotool into `%USERPROFILE%\.pico-sdk`. These steps follow the extension's documented flow (version 0.23.0 when this was written). They have not been run on this project yet.
+You need a Windows PC with internet access the first time. The Pico VS Code extension downloads the SDK, the compiler, CMake, Ninja and picotool into `%USERPROFILE%\.pico-sdk`. These steps were run on this project on 2026-10-26 with extension 0.23.0.
 
 1. Install [Visual Studio Code](https://code.visualstudio.com/) and [Git](https://git-scm.com/).
 2. In VS Code, open Extensions, search for **Raspberry Pi Pico**, and install the one published by Raspberry Pi.
 3. Clone the repo, then create your secrets file (next section).
 4. In VS Code, use **File > Open Folder** and open the `firmware` folder of the repo, not the repo root. The extension looks for `CMakeLists.txt` in the folder you open.
-5. The extension reads the pinned versions from `firmware/CMakeLists.txt` (SDK 2.3.1, toolchain 15_2_Rel1, picotool 2.3.1) and offers to download them. Accept. If it asks to import the project instead, choose **Import Project**, pick the `firmware` folder and SDK 2.3.1.
+5. The extension reads the pinned versions from `firmware/CMakeLists.txt` (SDK 2.3.1, toolchain 15_2_Rel1, picotool 2.3.1) and offers to download them. Accept. If nothing happens, press Ctrl+Shift+P and run **Raspberry Pi Pico: Import Pico Project**. Pick the `firmware` folder and SDK 2.3.1, check under Show Advanced Options that the toolchain is 15.2.Rel1, leave Ninja and CMake on their defaults and **Enable CMake-Tools extension integration** unchecked, then click Import. The download goes to `%USERPROFILE%\.pico-sdk`.
 6. Click **Compile** in the status bar at the bottom, or press Ctrl+Shift+P and run **Raspberry Pi Pico: Compile Project**.
 7. The output is `firmware\build\invigil.uf2`. The build folder is gitignored.
 
 If the build stops with `firmware/secrets.h is missing`, do the next section first.
 
-The extension may create a `firmware/.vscode/` folder. It holds local editor settings.
+The import creates `firmware/.vscode/` and `firmware/.gitignore`, and rewrites the line endings of `firmware/CMakeLists.txt` and `firmware/pico_sdk_import.cmake` without changing their content. None of these are for committing. Restore the two files with `git restore firmware/CMakeLists.txt firmware/pico_sdk_import.cmake`, and add `firmware/.vscode/` to `.git/info/exclude`.
 
 ### Secrets
 
@@ -96,11 +96,17 @@ python firmware/tests/check_contract.py firmware/build/tests/samples.tsv
 2. Hold the **BOOTSEL** button and plug the USB cable into the laptop. Release the button. A drive named `RP2350` appears.
 3. Drag `firmware\build\invigil.uf2` onto that drive. The drive disappears and the unit reboots into the new firmware.
 
-To watch the log, open the unit's USB serial port: the Serial Monitor tab in VS Code, or PuTTY on the COM port Windows assigns. The unit waits up to 3 s at boot for a terminal, so the self-checks are not missed. If you connect later, unplug and replug.
+When the unit is already running this firmware, picotool can flash it without the BOOTSEL button. It reboots the unit into BOOTSEL over USB, loads the file, and starts it:
+
+```powershell
+& "$env:USERPROFILE\.pico-sdk\picotool\2.3.1\picotool\picotool.exe" load -f -x firmware\build\invigil.uf2
+```
+
+To watch the log, open the unit's USB serial port: the Serial Monitor tab in VS Code, or PuTTY on the COM port Windows assigns. The unit waits up to 3 s at boot for a terminal, so the self-checks are not missed. If you connect later, unplug and replug. The terminal must set DTR, which those tools do: the firmware only treats the port as open when DTR is set.
 
 ## First boot
 
-These lines come from the code. They have not been seen on a real unit yet, so the numbers are examples only.
+This is what unit N1 printed on its first boot (2026-10-26), with the network name and addresses replaced by examples. Your numbers will differ.
 
 ```
 Invigil unit N1, firmware 0.1.0, Pico SDK 2.3.1
@@ -112,14 +118,17 @@ self-checks:
   PASS  nRF24L01: answers on SPI0 at 4000 kHz, RX mode, auto-ack off
 timing: scan 1000 ms, send up to 300 ms, quiet gap 50 ms, status every 10000 ms
 wifi: connecting to "hall-wifi"
+wifi: connection failed
+wifi: retrying in 1 s
+wifi: connecting to "hall-wifi"
 wifi: connected to "hall-wifi", IP 192.168.1.23
-wifi: channel 6 (2437 MHz, nRF channels 27-47), RSSI -52 dBm
+wifi: channel 6 (2437 MHz, nRF channels 27-47), RSSI -40 dBm
 sntp: asking pool.ntp.org for the time
-sntp: clock set to 2026-10-20 09:15:02 UTC
+sntp: clock set to 2026-10-26 16:17:21 UTC
 mqtt: connecting to 192.168.1.10:1883 as invigil-N1
 mqtt: connected
-sntp: clock corrected by +12 ms
-summary t=20s windows=7 sweeps_per_window=... sweep_us=... ...
+sntp: clock corrected by +134 ms
+summary t=21s windows=9 sweeps_per_window=42 sweep_us=23354 sweep_us_max=24785 ble_captured=465 ...
 ```
 
 What to look for:
@@ -129,6 +138,8 @@ What to look for:
   - **hash test vector FAIL**: BLE stays off and no BLE reading is ever published. If it also says the bytes are reversed, see the byte-order check below.
   - **hash salt FAIL**: set `HASH_SALT` in `secrets.h`. BLE stays off until then.
   - **nRF24L01 FAIL**: check the wiring and power. BLE keeps running, but no spectrum messages are sent.
+- `wifi: network not found` over and over: the unit cannot see the network. The Pico 2 W only uses 2.4 GHz, and on the first run it never found a network on channel 13, even though the firmware sets the country to Egypt, which allows channels 1 to 13. Set the router's 2.4 GHz channel to a fixed 1, 6 or 11, not Auto, and check that 2.4 GHz is on for that network name.
+- A single `wifi: connection failed` before connecting is normal. It happened on most boots and the second attempt worked.
 - The `sntp: clock corrected` line comes from a second time request. The first answer cannot be corrected for network delay because the clock starts at 1970, so the unit asks again at once.
 
 ### LED
@@ -188,7 +199,7 @@ Two counters in the summary check the lwIP part on the real unit. `tx_in_scan` c
 
 These depend on hardware behavior, so they are tests to run, not numbers to assume. Save each run's summary lines, plots and a short note in `docs/results/YYYY-MM-DD-<name>/`.
 
-**Byte order of BTstack addresses.** The boot self-check proves the hash code matches [the test vector](hashing.md#test-vector), but it uses BTstack's own text parser. It cannot show the order of the bytes BTstack hands over from a real advertisement. One-time check:
+**Byte order of BTstack addresses.** Done on 2026-10-26: the order is correct and `hash_bd_addr()` needs no change ([report](results/2026-10-26-byte-order/report.md)). The steps below are kept in case the BTstack version changes. The boot self-check proves the hash code matches [the test vector](hashing.md#test-vector), but it uses BTstack's own text parser. It cannot show the order of the bytes BTstack hands over from a real advertisement. One-time check:
 
 1. In `firmware/src/config.h`, change `#define INVIGIL_DEBUG_RAW_ADDR 0` to `1`, then build and flash. The boot log shows a WARNING that this is a debug build.
 2. Install the **nRF Connect** app on a phone and start a scan near the unit. Pick a device whose address does not change, for example a smartwatch or a BLE beacon.
@@ -197,7 +208,7 @@ These depend on hardware behavior, so they are tests to run, not numbers to assu
    - Reversed (the unit shows `FF:EE:DD:CC:BB:AA`): the bytes must be flipped before hashing in `hash_bd_addr()` in `src/ble_scan.c`.
 4. Set the flag back to `0`, build and flash again. CI fails if `1` is committed. Do not save the debug log: it holds raw addresses.
 
-**Sweep time.** Run the unit for 2 minutes with no test devices nearby. Record `sweep_us`, `sweep_us_max` and `sweeps_per_window`. Then raise `NRF_SPI_HZ` (it is 4 MHz because of breadboard jumper wires) and check the sweep time and the nRF self-check still pass.
+**Sweep time.** First result (2026-10-26, 4 MHz SPI over breadboard wires, with the radio on the adapter board): 23.4 ms per 126-channel sweep on average, 25.0 ms at most, 42 sweeps per scan window. Run the unit for 2 minutes with no test devices nearby. Record `sweep_us`, `sweep_us_max` and `sweeps_per_window`. Then raise `NRF_SPI_HZ` (it is 4 MHz because of breadboard jumper wires) and check the sweep time and the nRF self-check still pass.
 
 **Scan window, send window and quiet gap.** With 3 to 5 BLE devices nearby, run for 10 minutes and record `send_ms_max`, `mqtt_busy`, `send_overruns`, `ble_dropped` and `spectrum_dropped`. They should all stay at 0 except `send_ms_max`. If `send_overruns` or `ble_dropped` is not 0, lengthen `SEND_WINDOW_MAX_MS` or `SEND_DRAIN_MS`. Then check the cycle against design requirement 1 (at most 5 s from when a device starts transmitting) and the open question on window length in the [contract](contract.md).
 
@@ -207,7 +218,7 @@ These depend on hardware behavior, so they are tests to run, not numbers to assu
 
 **BLE scan interval and window.** With one phone 1 m away advertising at a known rate (for example nRF Connect's advertiser at 100 ms), count `ble_captured` per minute. Try `BLE_SCAN_INTERVAL` and `BLE_SCAN_WINDOW` at 48 and 48, then 96 and 96, and keep the one that catches more.
 
-**Wi-Fi channel reading.** Check that the channel the unit prints matches the router's settings page. The firmware reads it with a raw driver request whose answer format is assumed.
+**Wi-Fi channel reading.** Check that the channel the unit prints matches the router's settings page. The firmware reads it with a raw driver request whose answer format is assumed. First check (2026-10-26): with the router's 2.4 GHz channel fixed on 6, the unit printed channel 6 and the laptop saw the access point on channel 6.
 
 **RPD threshold and module.** The datasheet puts the RPD threshold at about -64 dBm at the chip. The PA+LNA module adds gain in front of it, and many modules carry a clone chip. Put a phone streaming audio over Bluetooth 0.5 m, 1 m, 2 m and 3.5 m from the unit and record the hit counts. With no devices, hits outside the Wi-Fi block should be near 0.
 
