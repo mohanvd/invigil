@@ -52,7 +52,7 @@ Working on the real unit (first run 2026-10-26, see [docs/results](docs/results/
 - **Launcher** (`invigil/`): starts the broker, the logger and the dashboard with one command, and runs guided calibration.
 - **Dashboard** in Live mode, reading the unit through Mosquitto.
 
-Latency figures are not valid yet: the laptop clock was off from NTP during the first runs.
+First latency figure, with the laptop clock checked against NTP: over 10 minutes, every message from the unit reached the laptop within 1.11 s, nothing was dropped ([report](docs/results/2026-10-26-latency/report.md)). The figures from the first boot are not valid, because the laptop clock was off then.
 
 Also working, and testable on a laptop with no hardware:
 
