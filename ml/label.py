@@ -38,6 +38,25 @@ def summary(session_dir: Path):
     return out.sort_values(["rssi_median", "advs"], ascending=False)
 
 
+def device_labels(type_: str = "?", band: str = "?", model: str = "", state: str = "", position: str = "") -> dict:
+    """The labels for one device, in the order session.json lists them."""
+    return {"type": type_, "band": band, "model": model, "state": state, "position": position}
+
+
+def write_session_json(session_dir: Path, devices: dict, notes: str = "", **extra) -> Path | None:
+    """Write session.json unless one exists. Returns its path, or None if left unchanged.
+
+    devices maps each hashed address to its labels (see device_labels()).
+    Extra keys, such as "kind", go at the top level.
+    """
+    path = Path(session_dir) / "session.json"
+    if path.exists():
+        return None
+    meta = {"name": Path(session_dir).name, "notes": notes, **extra, "devices": devices}
+    path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def main(argv: list[str] | None = None) -> None:
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 1:
@@ -48,17 +67,11 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"no BLE readings in {session_dir}")
     print(table.to_string())
 
-    path = session_dir / "session.json"
-    if path.exists():
-        print(f"\n{path} already exists, left unchanged.")
-        return
     top = table.index[0]
-    template = {
-        "name": session_dir.name,
-        "notes": "",
-        "devices": {top: {"type": "?", "band": "?", "model": "", "state": "", "position": ""}},
-    }
-    path.write_text(json.dumps(template, indent=2) + "\n", encoding="utf-8")
+    path = write_session_json(session_dir, {top: device_labels()})
+    if path is None:
+        print(f"\n{session_dir / 'session.json'} already exists, left unchanged.")
+        return
     print(f"\nWrote {path} with {top} as the test device.")
     print(f"Set type to one of {', '.join(TYPES)} and band to one of {', '.join(BANDS)}.")
 

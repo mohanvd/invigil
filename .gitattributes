@@ -1,6 +1,9 @@
 # Text files use LF line endings in the repo and in the working copy.
 * text=auto eol=lf
 
+# Windows batch files need CRLF, cmd.exe can misread LF-only files.
+*.bat text eol=crlf
+
 # SVG is text, so diffs stay readable.
 *.svg text eol=lf
 

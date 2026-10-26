@@ -57,6 +57,25 @@ export function loadSettings(): Settings {
   }
 }
 
+/**
+ * Settings from the page URL, as the laptop launcher opens it:
+ * ?source=live&broker=ws://localhost:9001&user=invigil
+ * Returns null when the URL has none of them. A password in the URL is
+ * ignored on purpose: it is typed into Settings and kept for the tab only.
+ */
+export function settingsFromQuery(search: string, current: Settings): Settings | null {
+  const params = new URLSearchParams(search)
+  if (!params.has("source") && !params.has("broker") && !params.has("user")) return null
+  const next = { ...current }
+  const source = params.get("source")
+  if (source === "live" || source === "demo") next.source = source
+  const broker = params.get("broker")
+  if (broker !== null && isBrokerUrl(broker)) next.brokerUrl = broker
+  const user = params.get("user")
+  if (user !== null) next.username = user
+  return next
+}
+
 export function loadPassword(): string {
   return readString(sessionStorage, PASSWORD_KEY) ?? ""
 }
