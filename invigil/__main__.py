@@ -155,6 +155,7 @@ def cmd_start(args) -> int:
         lg = procs.spawn("logger", [sys.executable, "-m", "server.logger", "--session", name], out=str(out))
         records.append(lg)
         procs.save_run(records)
+        ntp.record(out, "start", clock)
 
         url = dashboard.live_url(args.port, f"ws://localhost:{broker.WS_PORT}", cfg.username)
         web = procs.spawn("dashboard", dashboard.serve_cmd(args.port), url=f"http://127.0.0.1:{args.port}")
@@ -219,7 +220,11 @@ def show_status(args, records, live: bool, wait_for_unit: bool, clock=None, open
         monitor.close(client)
 
 
-def stop_all(records: list[dict]) -> None:
+def stop_all(records: list[dict], ntp_server: str = ntp.DEFAULT_SERVER) -> None:
+    for record in records:
+        # The clock at the end of a recording goes next to the one at its start.
+        if record["name"] == "logger" and record.get("out") and procs.is_running(record):
+            ntp.record(Path(record["out"]), "stop", ntp.check_clock(ntp_server))
     for record in reversed(records):
         print(f"{record['name']} (PID {record['pid']}): {procs.stop(record)}")
     procs.save_run([r for r in records if procs.is_running(r)])
@@ -230,7 +235,7 @@ def cmd_stop(args) -> int:
     if not records:
         print("Nothing to stop: the launcher has not started anything.")
         return 0
-    stop_all(records)
+    stop_all(records, args.ntp_server)
     return 0
 
 
