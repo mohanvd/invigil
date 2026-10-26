@@ -157,7 +157,7 @@ def cmd_start(args) -> int:
         procs.save_run(records)
 
         url = dashboard.live_url(args.port, f"ws://localhost:{broker.WS_PORT}", cfg.username)
-        web = procs.spawn("dashboard", dashboard.serve_cmd(args.port), url=url)
+        web = procs.spawn("dashboard", dashboard.serve_cmd(args.port), url=f"http://127.0.0.1:{args.port}")
         records.append(web)
         procs.save_run(records)
         if not wait_for_port(args.port, 10):
@@ -239,6 +239,14 @@ def cmd_status(args) -> int:
 
 
 def cmd_calibrate(args) -> int:
+    try:
+        return run_calibration(args)
+    except EOFError:
+        print("\nInput ended. Progress so far is saved. Run calibrate again to continue.")
+        return 1
+
+
+def run_calibration(args) -> int:
     progress, path = calibrate.setup(args)
     if not progress.remaining():
         print(calibrate.results_table(progress))

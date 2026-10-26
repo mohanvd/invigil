@@ -147,6 +147,17 @@ def test_a_step_with_no_readings_is_repeated(tmp_path, progress):
     assert p.remaining() == []
 
 
+def test_input_ending_early_exits_cleanly(monkeypatch, capsys):
+    from invigil.__main__ import cmd_calibrate
+
+    def no_more_input(args):
+        raise EOFError
+
+    monkeypatch.setattr(calibrate, "setup", no_more_input)
+    assert cmd_calibrate(Namespace()) == 1
+    assert "Input ended" in capsys.readouterr().out
+
+
 def test_setup_asks_for_what_is_missing_and_finds_saved_progress(tmp_path, monkeypatch):
     monkeypatch.setattr(calibrate, "STATE_DIR", tmp_path)
     monkeypatch.setattr(calibrate.Progress, "path_for", staticmethod(lambda t, n, base=tmp_path: base / f"{t}-{calibrate.slug(n)}.json"))
