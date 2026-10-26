@@ -10,11 +10,22 @@ import {
   SettingsContext,
   loadPassword,
   loadSettings,
+  settingsFromQuery,
 } from "./settings"
 import type { Settings, SettingsContextValue } from "./settings"
 
+/** Stored settings, updated from the URL if it has any, which is then removed from the address bar. */
+function initialSettings(): Settings {
+  const stored = loadSettings()
+  const fromQuery = settingsFromQuery(window.location.search, stored)
+  if (!fromQuery) return stored
+  writeJson(localStorage, SETTINGS_KEY, fromQuery)
+  window.history.replaceState(null, "", window.location.pathname + window.location.hash)
+  return fromQuery
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [settings, setSettings] = useState<Settings>(initialSettings)
   const [password, setPasswordState] = useState(loadPassword)
 
   const value = useMemo<SettingsContextValue>(
