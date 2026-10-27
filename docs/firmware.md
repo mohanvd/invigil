@@ -15,7 +15,7 @@ Wiring is in the [README](../README.md#wiring). The message formats are in the [
 The unit repeats one cycle, as the [MQTT contract](contract.md) requires:
 
 1. **Scan window** (1000 ms). BLE scan on, nRF24L01 sweeps channels 0 to 125 back to back. No MQTT traffic.
-2. **Send window** (up to 300 ms). BLE scan off, sweeps stopped. Publish one spectrum message for the window (`ts` is the end of the scan window), then the buffered BLE readings, oldest first, then a status message if one is due (every 10 s). The window ends when the buffer is empty, or when time runs out. Leftovers wait for the next send window. Then the unit waits until everything has left lwIP for the radio.
+2. **Send window** (normally up to 500 ms). BLE scan off, sweeps stopped. Publish one spectrum message for the window (`ts` is the end of the scan window), then the buffered BLE readings, oldest first, then a status message if one is due (every 10 s). New messages stop 50 ms before the limit, and leftovers wait for the next send window. Then the unit waits until everything has left lwIP **and the broker has acknowledged it**, so TCP has nothing it could send again. If that takes longer than 500 ms, it keeps waiting and counts an overrun (`send_overruns`): **a scan window never starts while the unit still has data in flight.** After 5 s it hands back to the reconnect checks, but the next scan still waits for the drain.
 3. **Quiet gap** (50 ms), then the next scan window.
 
 The cycle only runs while Wi-Fi is up, the clock is set by SNTP and MQTT is connected. Nothing is published before the clock is set, because the contract rejects unsynced timestamps. Reconnecting happens between cycles, never inside a scan window.
@@ -168,7 +168,7 @@ Every 10 s the unit prints one line of `key=value` pairs. These are the numbers 
 | `status_sent` | Status messages sent |
 | `send_ms_max` | Longest send window, in ms |
 | `mqtt_busy` | Times the MQTT output buffer was full and the unit waited for it to drain |
-| `send_overruns` | Send windows that hit 300 ms before everything left lwIP |
+| `send_overruns` | Send windows that needed more than 500 ms to drain. The unit waited longer instead of scanning |
 | `tx_in_scan` | Frames lwIP handed to the radio during scan windows. Should be 0 |
 | `sweeps_discarded` | Sweeps thrown away because lwIP sent a frame during them |
 | `wifi`, `mqtt` | Connection state |
@@ -181,9 +181,9 @@ The contract says the unit must not scan the 2.4 GHz band while it transmits ove
 
 | Source | What happens | Can it land in a scan window? |
 | --- | --- | --- |
-| Publishes | Only in send windows. The send window then waits until the MQTT output buffer is empty and TCP has nothing unsent. Nagle is off, so no segment waits for the broker's delayed ack | No, unless a send window hits 300 ms first (`send_overruns`) |
+| Publishes | Only in send windows. The send window then waits until the MQTT output buffer is empty and TCP has nothing unsent or unacknowledged, however long that takes. Nagle is off, so no segment waits for the broker's delayed ack | No |
 | MQTT keep alive | lwIP's MQTT timer only adds a PINGREQ to the output buffer after 60 s with nothing acknowledged. It does not send it; the next publish does. Every send window publishes | No |
-| TCP retransmission | If an ack from the broker is lost, lwIP resends after its timeout, which is at least about a second | Rarely |
+| TCP retransmission | lwIP only resends a segment that has not been acknowledged, and a scan window only starts once every segment is acknowledged | No |
 | TCP acks | The unit only acks data it receives. At QoS 0 the broker sends nothing back except TCP acks | No |
 | ARP | lwIP answers another host's ARP request as soon as it arrives. Its own ARP refreshes only happen when it sends | Yes, when the laptop or router asks |
 | DHCP | Lease renewal at half the lease time (12 h for a 24 h lease) | Rarely |
@@ -210,7 +210,7 @@ These depend on hardware behavior, so they are tests to run, not numbers to assu
 
 **Sweep time.** First result (2026-10-26, 4 MHz SPI over breadboard wires, with the radio on the adapter board): 23.4 ms per 126-channel sweep on average, 25.0 ms at most, 42 sweeps per scan window. Run the unit for 2 minutes with no test devices nearby. Record `sweep_us`, `sweep_us_max` and `sweeps_per_window`. Then raise `NRF_SPI_HZ` (it is 4 MHz because of breadboard jumper wires) and check the sweep time and the nRF self-check still pass.
 
-**Scan window, send window and quiet gap.** First result (2026-10-26, 10 minutes, devices not controlled, about 42 BLE readings a second): `send_ms_max` 118, and `mqtt_busy`, `send_overruns`, `ble_dropped` and `spectrum_dropped` all 0 ([report](results/2026-10-26-latency/report.md)). Still to do with known devices. With 3 to 5 BLE devices nearby, run for 10 minutes and record `send_ms_max`, `mqtt_busy`, `send_overruns`, `ble_dropped` and `spectrum_dropped`. They should all stay at 0 except `send_ms_max`. If `send_overruns` or `ble_dropped` is not 0, lengthen `SEND_WINDOW_MAX_MS` or `SEND_DRAIN_MS`. Then check the cycle against design requirement 1 (at most 5 s from when a device starts transmitting) and the open question on window length in the [contract](contract.md).
+**Scan window, send window and quiet gap.** First result (2026-10-26, 10 minutes, devices not controlled, about 42 BLE readings a second): `send_ms_max` 118, and `mqtt_busy`, `send_overruns`, `ble_dropped` and `spectrum_dropped` all 0 ([report](results/2026-10-26-latency/report.md)). In a crowded room on 2026-10-27 (116 devices, about 127 BLE readings a second), 300 ms ran out and MQTT data went out during scan windows. Firmware 0.1.1 raised the limit to 500 ms and waits for a full drain before scanning: MQTT no longer lands in scan windows, but send windows took up to 5 s, the unit scanned 53 % of the time, and BLE latency p95 reached 4.6 s ([report](results/2026-10-27-send-window-500/report.md)). Still to do with known devices. With 3 to 5 BLE devices nearby, run for 10 minutes and record `send_ms_max`, `mqtt_busy`, `send_overruns`, `ble_dropped` and `spectrum_dropped`. They should all stay at 0 except `send_ms_max`. If `send_overruns` or `ble_dropped` is not 0, lengthen `SEND_WINDOW_MAX_MS` or `SEND_DRAIN_MS`. Then check the cycle against design requirement 1 (at most 5 s from when a device starts transmitting) and the open question on window length in the [contract](contract.md).
 
 **Does the unit's own Wi-Fi show up in the spectrum.** The unit prints its Wi-Fi channel at connect (for example `nRF channels 27-47`). The router transmits on that channel too, so compare two runs that differ only in the quiet gap. With no test devices, record 5 minutes with `QUIET_GAP_MS` at 50, then 5 minutes at 250. If the hits on the unit's Wi-Fi channels drop with the longer gap, the unit's own frames were reaching scan windows: keep the longer gap. Also check `tx_in_scan` stays at 0 in both runs.
 
