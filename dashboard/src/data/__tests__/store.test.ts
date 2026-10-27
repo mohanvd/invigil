@@ -21,7 +21,7 @@ function makeStore() {
 }
 
 function ble(ts: number, addr = "a91f03c2d4e8", rssi = -58) {
-  return JSON.stringify({ ts, node: "N1", addr, rssi, mfr: "0x004C" })
+  return JSON.stringify({ ts: ts + 500, node: "N1", readings: [{ ts, addr, rssi, mfr: "0x004C" }] })
 }
 
 function detection(overrides: Partial<Detection> = {}): Detection {
@@ -48,11 +48,39 @@ describe("message ingest", () => {
     expect(state.lastRxTs).toBe(T0 + 120)
   })
 
+  it("stores every reading of a batched message and counts readings", () => {
+    const store = makeStore()
+    const msg = {
+      ts: T0 + 1000,
+      node: "N1",
+      readings: [
+        { ts: T0, addr: "a91f03c2d4e8", rssi: -58, mfr: "0x004C" },
+        { ts: T0 + 200, addr: "0123456789ab", rssi: -80, mfr: null },
+        { ts: T0 + 400, addr: "a91f03c2d4e8", rssi: -61, mfr: null },
+      ],
+    }
+    store.message("invigil/node/N1/ble", JSON.stringify(msg), T0 + 1100)
+    const state = store.getSnapshot()
+    expect(state.counts.ble).toBe(3)
+    expect(state.heard.a91f03c2d4e8.count).toBe(2)
+    expect(state.heard.a91f03c2d4e8.readings).toEqual([
+      { ts: T0, rssi: -58 },
+      { ts: T0 + 400, rssi: -61 },
+    ])
+    expect(state.heard.a91f03c2d4e8.mfr).toBe("0x004C")
+    expect(state.heard.a91f03c2d4e8.lastTs).toBe(T0 + 400)
+    expect(state.heard["0123456789ab"].count).toBe(1)
+    expect(state.rxTimes).toHaveLength(1)
+  })
+
   it("drops and counts bad messages without throwing", () => {
     const store = makeStore()
     const bad: [string, string][] = [
       ["invigil/node/N1/ble", "{broken"],
-      ["invigil/node/N1/ble", JSON.stringify({ ts: T0, node: "N1", addr: "A9:1F:03:C2:D4:E8", rssi: -58, mfr: null })],
+      [
+        "invigil/node/N1/ble",
+        JSON.stringify({ ts: T0, node: "N1", readings: [{ ts: T0, addr: "A9:1F:03:C2:D4:E8", rssi: -58, mfr: null }] }),
+      ],
       ["invigil/node/N1/spectrum", JSON.stringify({ ts: T0, node: "N1", sweeps: 20, hits: [1, 2, 3] })],
       ["invigil/node/N1/status", JSON.stringify({ ts: 1_727_340_000, node: "N1", uptime_s: 1, wifi_rssi: -60, fw: "0.1.0" })],
       ["invigil/node/N7/ble", ble(T0)],

@@ -28,7 +28,8 @@ void ble_scan_stop(void);
 
 // Buffer access for the send window. Call with the async context lock held
 // (cyw43_arch_lwip_begin), since the BTstack callback adds readings.
-bool ble_scan_peek_locked(ble_reading_t *out);
+// i counts from the oldest reading (0). Pop removes the oldest.
+bool ble_scan_peek_at_locked(uint32_t i, ble_reading_t *out);
 void ble_scan_pop_locked(void);
 
 // Counts since the last call, plus the number buffered now.

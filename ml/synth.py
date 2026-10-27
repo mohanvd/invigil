@@ -56,9 +56,9 @@ def write_session(out: Path, name: str, dtype: str, band: str, seconds: int, rng
         while t < end:
             if rng.random() < CATCH_RATE:
                 rssi = max(-127, min(0, round(rng.gauss(base_rssi, RSSI_NOISE))))
-                msg = {"ts": int(t), "node": "N1", "addr": addr, "rssi": rssi, "mfr": mfr_id}
-                contract.validate("ble", msg)
-                ble_rows.append([int(t) + 30, msg["ts"], "N1", addr, rssi, mfr_id or ""])
+                reading = {"ts": int(t), "addr": addr, "rssi": rssi, "mfr": mfr_id}
+                contract.validate("ble", {"ts": int(t), "node": "N1", "readings": [reading]})
+                ble_rows.append([int(t) + 30, reading["ts"], "N1", addr, rssi, mfr_id or ""])
             t += every_ms + rng.uniform(0, 10)  # BLE adds 0-10 ms of random delay
 
     advertise(target, mfr, BAND_RSSI[band] + rng.uniform(-3, 3), interval)

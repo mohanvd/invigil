@@ -64,10 +64,12 @@
 // ---------------------------------------------------------------------------
 // MQTT (lwIP MQTT app)
 // ---------------------------------------------------------------------------
-// The default output buffer (256 bytes) cannot hold one spectrum message
-// (up to about 850 bytes with topic and header). 4 KB holds a spectrum
-// message and a few dozen BLE readings.
-#define MQTT_OUTPUT_RINGBUF_SIZE 4096
+// lwIP's MQTT client only takes a publish when the whole packet fits in this
+// buffer at once. The default (256 bytes) cannot hold one spectrum message
+// (up to about 850 bytes with topic and header). 8 KB holds a spectrum
+// message, five full ble messages (1400 bytes each, docs/contract.md) and a
+// status message, so a send window rarely waits on it.
+#define MQTT_OUTPUT_RINGBUF_SIZE 8192
 // A QoS 0 publish holds a request slot until TCP acknowledges it. Enough
 // slots that the output buffer, not the slots, is the limit.
 #define MQTT_REQ_MAX_IN_FLIGHT 64

@@ -119,7 +119,7 @@ Logger       data/raw/2026-10-26-live-193000 (PID 4188)
 Dashboard    http://127.0.0.1:8080/?source=live&... (PID 4236)
 Unit N1      online
 Last status  uptime 22m 11s, Wi-Fi RSSI -46 dBm, fw 0.1.0, 1 s ago
-Messages     ble 35.2/s, spectrum 0.9/s, status 0.1/s, rejected 0
+Readings     ble 35.2/s, spectrum 0.9/s, status 0.1/s, rejected messages 0
 Laptop clock 12 ms behind pool.ntp.org
 ```
 
@@ -152,7 +152,7 @@ Each session folder holds three CSV files, one per message type:
 | `status.csv` | `rx_ts, ts, node, uptime_s, wifi_rssi, fw` |
 
 - `ts` is when the unit took the reading. `rx_ts` is when the laptop received it. Both are milliseconds since epoch, so `rx_ts - ts` is the unit-to-laptop latency (design requirement 4). The two clocks are only as close as SNTP keeps them, so check the clock offset before you report a latency result. A negative latency means the unit clock is ahead.
-- Fake runs show `fw` as `0.1.0-fake` in `status.csv`.
+- Fake runs show `fw` as `0.2.0-fake` in `status.csv`.
 - A session started by `invigil start` also gets `clock.json`: the laptop clock against NTP when the recording started, and again when `invigil stop` ended it. `laptop_minus_ntp_ms` is how far `rx_ts` ran ahead of real time, so subtract it from `rx_ts - ts` before you report a latency. `null` means the NTP server could not be reached.
 - Files are flushed after every row, so a crash or Ctrl+C loses nothing.
 

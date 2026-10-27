@@ -3,7 +3,8 @@
 // The unit repeats one cycle (docs/contract.md):
 //   1. Scan window: BLE scan on, nRF sweeps back to back, no MQTT traffic.
 //   2. Send window: BLE scan off, sweeps stopped. Publish the window's
-//      spectrum message, then buffered BLE readings, then status if due.
+//      spectrum message, then buffered BLE readings packed into as few ble
+//      messages as fit (docs/contract.md), then status if due.
 //      It ends when everything has left lwIP, even if that takes longer
 //      than SEND_WINDOW_MAX_MS (counted as an overrun).
 //   3. Quiet gap, then the next scan window.
@@ -36,7 +37,8 @@ static bool node_ok;
 static char topic_ble[TOPIC_MAX_LEN];
 static char topic_spectrum[TOPIC_MAX_LEN];
 static char topic_status[TOPIC_MAX_LEN];
-static char payload[PAYLOAD_SPECTRUM_MAX_LEN];
+// Fits the largest message of any kind.
+static char payload[PAYLOAD_BLE_MAX_LEN > PAYLOAD_SPECTRUM_MAX_LEN ? PAYLOAD_BLE_MAX_LEN : PAYLOAD_SPECTRUM_MAX_LEN];
 
 static bool led_on;
 static absolute_time_t next_status;
@@ -51,7 +53,8 @@ static struct {
     uint32_t sweep_us_max;
     uint32_t sweeps_timed;
     uint32_t tx_in_scan;        // frames lwIP handed to the radio during scan windows
-    uint32_t ble_published;
+    uint32_t ble_published;     // readings
+    uint32_t ble_messages;      // ble messages they went out in
     uint32_t ble_invalid;       // readings that failed the contract check, dropped
     uint32_t spectrum_sent;
     uint32_t spectrum_dropped;
@@ -194,28 +197,49 @@ static void send_window(uint64_t scan_end_ms) {
         }
     }
 
-    // 2. Buffered BLE readings, oldest first. What does not fit waits for
-    //    the next send window. Peek, publish and pop happen under one lock,
-    //    so a reading leaves the buffer only once lwIP has taken it.
+    // 2. Buffered BLE readings, oldest first, as many to a message as fit.
+    //    What does not fit waits for the next send window. Each message is
+    //    built, published and its readings popped under one lock, so a
+    //    reading leaves the buffer only once lwIP has taken it. A message
+    //    lwIP is too busy for is built again on the next try.
     while (!time_reached(stop_queueing)) {
         tick();
-        ble_reading_t r;
         mqtt_pub_result_t result = MQTT_PUB_OK;
+        uint32_t taken = 0;  // readings looked at: in the message, or invalid
+        uint32_t invalid = 0;
         cyw43_arch_lwip_begin();
-        bool have = ble_scan_peek_locked(&r);
-        if (have) {
-            size_t n = payload_ble(payload, sizeof(payload), r.ts_ms, NODE_ID, r.addr, r.rssi, r.has_mfr, r.mfr);
-            result = n > 0 ? mqtt_link_publish(topic_ble, payload, n) : MQTT_PUB_ERROR;
+        ble_batch_t batch;
+        if (ble_batch_begin(&batch, payload, sizeof(payload), scan_end_ms, NODE_ID)) {
+            ble_reading_t r;
+            while (ble_scan_peek_at_locked(taken, &r)) {
+                ble_batch_result_t added = ble_batch_add(&batch, &r);
+                if (added == BLE_BATCH_FULL) {
+                    break;
+                }
+                if (added == BLE_BATCH_INVALID) {
+                    invalid++;  // can never be sent; do not block the rest
+                }
+                taken++;
+            }
+            size_t n = ble_batch_finish(&batch);
+            if (n > 0) {
+                result = mqtt_link_publish(topic_ble, payload, n);
+            }
             if (result == MQTT_PUB_OK) {
-                ble_scan_pop_locked();
-                stats.ble_published++;
+                stats.ble_published += batch.count;
+                stats.ble_messages += n > 0;
             } else if (result == MQTT_PUB_ERROR) {
-                ble_scan_pop_locked();  // can never be sent; do not block the rest
-                stats.ble_invalid++;
+                invalid += batch.count;  // lwIP refused it for good; do not block the rest
+            }
+            if (result == MQTT_PUB_OK || result == MQTT_PUB_ERROR) {
+                for (uint32_t i = 0; i < taken; i++) {
+                    ble_scan_pop_locked();
+                }
+                stats.ble_invalid += invalid;
             }
         }
         cyw43_arch_lwip_end();
-        if (!have || result == MQTT_PUB_DOWN) {
+        if (taken == 0 || result == MQTT_PUB_DOWN) {
             break;
         }
         if (result == MQTT_PUB_BUSY) {
@@ -272,12 +296,12 @@ static void print_summary(void) {
     uint32_t sweep_us = stats.sweeps_timed ? (uint32_t)(stats.sweep_us_total / stats.sweeps_timed) : 0;
 
     printf("summary t=%" PRIu32 "s windows=%" PRIu32 " sweeps_per_window=%" PRIu32 " sweep_us=%" PRIu32
-           " sweep_us_max=%" PRIu32 " ble_captured=%" PRIu32 " ble_published=%" PRIu32 " ble_dropped=%" PRIu32
+           " sweep_us_max=%" PRIu32 " ble_captured=%" PRIu32 " ble_published=%" PRIu32 " ble_msgs=%" PRIu32 " ble_dropped=%" PRIu32
            " ble_buffered=%" PRIu32 " spectrum_sent=%" PRIu32 " spectrum_dropped=%" PRIu32 " status_sent=%" PRIu32
            " send_ms_max=%" PRIu32 " mqtt_busy=%" PRIu32 " send_overruns=%" PRIu32 " tx_in_scan=%" PRIu32
            " sweeps_discarded=%" PRIu32 " wifi=%s mqtt=%s",
            (uint32_t)(time_us_64() / 1000000), stats.windows, per_window, sweep_us, stats.sweep_us_max,
-           ble.captured, stats.ble_published, ble.dropped, ble.buffered, stats.spectrum_sent,
+           ble.captured, stats.ble_published, stats.ble_messages, ble.dropped, ble.buffered, stats.spectrum_sent,
            stats.spectrum_dropped, stats.status_sent, stats.send_ms_max, stats.mqtt_busy, stats.send_overruns,
            stats.tx_in_scan, stats.sweeps_discarded, wifi_sta_state_name(), mqtt_link_state_name());
     if (ble.no_rssi || stats.ble_invalid) {

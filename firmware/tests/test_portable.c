@@ -266,6 +266,11 @@ static void test_ring_fifo_and_drop_oldest(void) {
     }
     CHECK(ring.count == 4);
     CHECK(ring.dropped == 2);
+    // peek_at walks from the oldest across the wrap, and stops at the end.
+    for (uint32_t i = 0; i < 4; i++) {
+        CHECK(ble_ring_peek_at(&ring, i, &out) && out.ts_ms == 4 + i);
+    }
+    CHECK(!ble_ring_peek_at(&ring, 4, &out));
     for (uint64_t want = 4; want <= 7; want++) {
         CHECK(ble_ring_peek(&ring, &out) && out.ts_ms == want);
         ble_ring_pop(&ring);
@@ -292,46 +297,130 @@ static void test_topics(void) {
     CHECK(payload_topic(t, 10, "N1", "ble") == 0);  // too small
 }
 
-static void test_ble_payload(void) {
+static ble_reading_t ble_reading(uint64_t ts, const char *addr, int rssi, bool has_mfr, uint16_t mfr) {
+    ble_reading_t r;
+    memset(&r, 0, sizeof(r));
+    r.ts_ms = ts;
+    strncpy(r.addr, addr, sizeof(r.addr) - 1);
+    r.rssi = (int8_t)rssi;
+    r.has_mfr = has_mfr;
+    r.mfr = mfr;
+    return r;
+}
+
+static void test_ble_batch(void) {
     char p[PAYLOAD_BLE_MAX_LEN];
-    size_t n = payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", -58, true, 0x004C);
-    CHECK_STR(p, "{\"ts\":1727340000123,\"node\":\"N1\",\"addr\":\"a91f03c2d4e8\",\"rssi\":-58,\"mfr\":\"0x004C\"}");
+    ble_batch_t b;
+    CHECK(ble_batch_begin(&b, p, sizeof(p), TS + 877, "N1"));
+    ble_reading_t r1 = ble_reading(TS, "a91f03c2d4e8", -58, true, 0x004C);
+    ble_reading_t r2 = ble_reading(TS + 287, "0f5e2b7a91c4", -127, false, 0);
+    ble_reading_t r3 = ble_reading(TS + 300, "a91f03c2d4e8", 0, true, 0xFFFF);
+    CHECK(ble_batch_add(&b, &r1) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_add(&b, &r2) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_add(&b, &r3) == BLE_BATCH_ADDED);
+    CHECK(b.count == 3);
+    size_t n = ble_batch_finish(&b);
+    CHECK_STR(p, "{\"ts\":1727340001000,\"node\":\"N1\",\"readings\":["
+                 "{\"ts\":1727340000123,\"addr\":\"a91f03c2d4e8\",\"rssi\":-58,\"mfr\":\"0x004C\"},"
+                 "{\"ts\":1727340000410,\"addr\":\"0f5e2b7a91c4\",\"rssi\":-127,\"mfr\":null},"
+                 "{\"ts\":1727340000423,\"addr\":\"a91f03c2d4e8\",\"rssi\":0,\"mfr\":\"0xFFFF\"}]}");
     CHECK(n == strlen(p));
 
-    payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", -127, false, 0);
-    CHECK_STR(p, "{\"ts\":1727340000123,\"node\":\"N1\",\"addr\":\"a91f03c2d4e8\",\"rssi\":-127,\"mfr\":null}");
+    // One reading.
+    CHECK(ble_batch_begin(&b, p, sizeof(p), TS + 877, "N1"));
+    CHECK(ble_batch_add(&b, &r1) == BLE_BATCH_ADDED);
+    ble_batch_finish(&b);
+    CHECK_STR(p, "{\"ts\":1727340001000,\"node\":\"N1\",\"readings\":["
+                 "{\"ts\":1727340000123,\"addr\":\"a91f03c2d4e8\",\"rssi\":-58,\"mfr\":\"0x004C\"}]}");
 
-    payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", 0, true, 0xFFFF);
-    CHECK_STR(p, "{\"ts\":1727340000123,\"node\":\"N1\",\"addr\":\"a91f03c2d4e8\",\"rssi\":0,\"mfr\":\"0xFFFF\"}");
-}
-
-static void test_ble_payload_rejects_off_contract(void) {
-    char p[PAYLOAD_BLE_MAX_LEN];
-    // Never a raw address, in any form.
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", "A9:1F:03:C2:D4:E8", -58, false, 0) == 0);
+    // No readings: nothing to send.
+    CHECK(ble_batch_begin(&b, p, sizeof(p), TS, "N1"));
+    CHECK(ble_batch_finish(&b) == 0);
     CHECK(p[0] == '\0');
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8ff", -58, false, 0) == 0);
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", "A91F03C2D4E8", -58, false, 0) == 0);
-    // RSSI outside -127..0.
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", 1, false, 0) == 0);
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", -128, false, 0) == 0);
-    // Clock not synced, or seconds instead of ms, or microseconds.
-    CHECK(payload_ble(p, sizeof(p), 0, "N1", "a91f03c2d4e8", -58, false, 0) == 0);
-    CHECK(payload_ble(p, sizeof(p), 1727340000ULL, "N1", "a91f03c2d4e8", -58, false, 0) == 0);
-    CHECK(payload_ble(p, sizeof(p), 1727340000123000ULL, "N1", "a91f03c2d4e8", -58, false, 0) == 0);
-    // Bad node.
-    CHECK(payload_ble(p, sizeof(p), TS, "", "a91f03c2d4e8", -58, false, 0) == 0);
-    CHECK(payload_ble(p, sizeof(p), TS, "N1\"", "a91f03c2d4e8", -58, false, 0) == 0);
 }
 
-static void test_payload_buffer_bounds(void) {
+static void test_ble_batch_rejects_off_contract(void) {
     char p[PAYLOAD_BLE_MAX_LEN];
-    size_t n = payload_ble(p, sizeof(p), TS, "N1", "a91f03c2d4e8", -58, true, 0x004C);
-    CHECK(n > 0);
-    char exact[PAYLOAD_BLE_MAX_LEN];
-    CHECK(payload_ble(exact, n, TS, "N1", "a91f03c2d4e8", -58, true, 0x004C) == 0);      // no room for NUL
-    CHECK(payload_ble(exact, n + 1, TS, "N1", "a91f03c2d4e8", -58, true, 0x004C) == n);  // just fits
-    CHECK(payload_ble(exact, 0, TS, "N1", "a91f03c2d4e8", -58, true, 0x004C) == 0);
+    ble_batch_t b;
+    const ble_reading_t good = ble_reading(TS, "a91f03c2d4e8", -58, false, 0);
+    const ble_reading_t bad[] = {
+        // Never a raw address, in any form.
+        ble_reading(TS, "A9:1F:03:C2:D4:E8", -58, false, 0),
+        ble_reading(TS, "a91f03c2d4e8f", -58, false, 0),
+        ble_reading(TS, "A91F03C2D4E8", -58, false, 0),
+        // RSSI outside -127..0.
+        ble_reading(TS, "a91f03c2d4e8", 1, false, 0),
+        ble_reading(TS, "a91f03c2d4e8", -128, false, 0),
+        // Clock not synced, or seconds instead of ms, or microseconds.
+        ble_reading(0, "a91f03c2d4e8", -58, false, 0),
+        ble_reading(1727340000ULL, "a91f03c2d4e8", -58, false, 0),
+        ble_reading(1727340000123000ULL, "a91f03c2d4e8", -58, false, 0),
+    };
+    CHECK(ble_batch_begin(&b, p, sizeof(p), TS, "N1"));
+    CHECK(ble_batch_add(&b, &good) == BLE_BATCH_ADDED);
+    size_t before = b.len;
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        CHECK(ble_batch_add(&b, &bad[i]) == BLE_BATCH_INVALID);
+    }
+    CHECK(b.count == 1 && b.len == before);  // unchanged by the bad ones
+    ble_batch_finish(&b);
+    CHECK(strstr(p, "A9:1F") == NULL);
+
+    // The message itself: clock, node, buffer.
+    CHECK(!ble_batch_begin(&b, p, sizeof(p), 1727340000ULL, "N1"));
+    CHECK(p[0] == '\0');
+    CHECK(!ble_batch_begin(&b, p, sizeof(p), TS, ""));
+    CHECK(!ble_batch_begin(&b, p, sizeof(p), TS, "N1\""));
+    CHECK(!ble_batch_begin(&b, p, 20, TS, "N1"));
+    CHECK(!ble_batch_begin(&b, p, 0, TS, "N1"));
+}
+
+static void test_ble_batch_size_limit(void) {
+    // The worst case reading, 69 bytes: 19 fit in 1400 bytes, as docs/contract.md says.
+    char p[PAYLOAD_BLE_MAX_LEN];
+    ble_batch_t b;
+    const ble_reading_t worst = ble_reading(CONTRACT_MAX_TS_MS, "a91f03c2d4e8", -127, true, 0xFFFF);
+    CHECK(ble_batch_begin(&b, p, sizeof(p), CONTRACT_MAX_TS_MS, "N1"));
+    int added = 0;
+    while (ble_batch_add(&b, &worst) == BLE_BATCH_ADDED) {
+        added++;
+    }
+    CHECK(added == 19);
+    CHECK(ble_batch_add(&b, &worst) == BLE_BATCH_FULL);  // still full, still unchanged
+    size_t n = ble_batch_finish(&b);
+    CHECK(n > 0 && n <= CONTRACT_MAX_BLE_PAYLOAD);
+    CHECK(n == strlen(p));
+    CHECK(p[n - 2] == ']' && p[n - 1] == '}');
+
+    // A bigger buffer does not raise the limit.
+    static char big[4 * PAYLOAD_BLE_MAX_LEN];
+    CHECK(ble_batch_begin(&b, big, sizeof(big), CONTRACT_MAX_TS_MS, "N1"));
+    added = 0;
+    while (ble_batch_add(&b, &worst) == BLE_BATCH_ADDED) {
+        added++;
+    }
+    CHECK(added == 19);
+    CHECK(ble_batch_finish(&b) <= CONTRACT_MAX_BLE_PAYLOAD);
+
+    // A smaller buffer lowers it, and the result always fits with its NUL.
+    for (size_t cap = 20; cap < 400; cap++) {
+        char small[400];
+        memset(small, 'x', sizeof(small));
+        if (!ble_batch_begin(&b, small, cap, CONTRACT_MAX_TS_MS, "N1")) {
+            continue;
+        }
+        ble_batch_result_t first = ble_batch_add(&b, &worst);
+        while (ble_batch_add(&b, &worst) == BLE_BATCH_ADDED) {
+        }
+        size_t len = ble_batch_finish(&b);
+        CHECK(len < cap);
+        CHECK(small[cap] == 'x');  // nothing written past the buffer
+        if (first == BLE_BATCH_INVALID) {
+            CHECK(len == 0);  // not even one reading fits: never FULL, so the caller moves on
+        } else {
+            CHECK(len == strlen(small));
+        }
+    }
 }
 
 static void test_spectrum_payload(void) {
@@ -630,16 +719,30 @@ static int write_samples(const char *path) {
         perror(path);
         return 1;
     }
-    char p[PAYLOAD_SPECTRUM_MAX_LEN];
+    char p[PAYLOAD_BLE_MAX_LEN > PAYLOAD_SPECTRUM_MAX_LEN ? PAYLOAD_BLE_MAX_LEN : PAYLOAD_SPECTRUM_MAX_LEN];
     char hash[ADDR_HASH_LEN + 1];
     addr_hash("invigil-test-vector", VECTOR_ADDR, hash);
 
-    // BLE
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", hash, -58, true, 0x004C) > 0);
+    // BLE: one reading, a mixed message, and a full message of worst-case readings.
+    ble_batch_t b;
+    const ble_reading_t r1 = ble_reading(TS, hash, -58, true, 0x004C);
+    const ble_reading_t r2 = ble_reading(TS + 300, hash, -127, false, 0);
+    const ble_reading_t r3 = ble_reading(CONTRACT_MAX_TS_MS, hash, 0, true, 0xFFFF);
+    const ble_reading_t worst = ble_reading(CONTRACT_MAX_TS_MS, hash, -127, true, 0xFFFF);
+    CHECK(ble_batch_begin(&b, p, sizeof(p), TS + 877, "N1"));
+    CHECK(ble_batch_add(&b, &r1) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_finish(&b) > 0);
     write_msg(f, "ble", p);
-    CHECK(payload_ble(p, sizeof(p), TS, "N1", hash, -127, false, 0) > 0);
+    CHECK(ble_batch_begin(&b, p, sizeof(p), CONTRACT_MAX_TS_MS, "N1"));
+    CHECK(ble_batch_add(&b, &r1) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_add(&b, &r2) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_add(&b, &r3) == BLE_BATCH_ADDED);
+    CHECK(ble_batch_finish(&b) > 0);
     write_msg(f, "ble", p);
-    CHECK(payload_ble(p, sizeof(p), CONTRACT_MAX_TS_MS, "N1", hash, 0, true, 0xFFFF) > 0);
+    CHECK(ble_batch_begin(&b, p, sizeof(p), CONTRACT_MAX_TS_MS, "N1"));
+    while (ble_batch_add(&b, &worst) == BLE_BATCH_ADDED) {
+    }
+    CHECK(ble_batch_finish(&b) > 0);
     write_msg(f, "ble", p);
 
     // Spectrum
@@ -714,9 +817,9 @@ int main(int argc, char **argv) {
     test_spectrum_caps_at_contract_max();
     test_ring_fifo_and_drop_oldest();
     test_topics();
-    test_ble_payload();
-    test_ble_payload_rejects_off_contract();
-    test_payload_buffer_bounds();
+    test_ble_batch();
+    test_ble_batch_rejects_off_contract();
+    test_ble_batch_size_limit();
     test_spectrum_payload();
     test_spectrum_payload_limits();
     test_status_payload();

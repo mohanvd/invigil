@@ -136,31 +136,82 @@ size_t payload_topic(char *buf, size_t cap, const char *node, const char *kind) 
     return finish(&w);
 }
 
-size_t payload_ble(char *buf, size_t cap, uint64_t ts_ms, const char *node, const char *addr,
-                   int rssi, bool has_mfr, uint16_t mfr) {
-    // The address must already be a hash. A raw address in any printed form
-    // fails this check, so it can never be published by mistake.
-    if (!addr_hash_is_valid(addr, strlen(addr)) || !rssi_in_range(rssi)) {
-        return fail(buf, cap);
+// The longest reading: {"ts":9999999999999,"addr":"...","rssi":-127,"mfr":"0xFFFF"}
+// is 69 bytes. Room to spare.
+#define READING_MAX_LEN 96
+static const char BATCH_TAIL[] = "]}";
+
+bool ble_batch_begin(ble_batch_t *b, char *buf, size_t cap, uint64_t ts_ms, const char *node) {
+    b->buf = buf;
+    b->limit = cap > 0 ? cap - 1 : 0;
+    if (b->limit > CONTRACT_MAX_BLE_PAYLOAD) {
+        b->limit = CONTRACT_MAX_BLE_PAYLOAD;
     }
+    b->len = 0;
+    b->count = 0;
     writer_t w = writer(buf, cap);
     if (!put_head(&w, ts_ms, node)) {
-        return fail(buf, cap);
+        fail(buf, cap);
+        return false;
     }
+    put_raw(&w, ",\"readings\":[");
+    if (!w.ok || w.len + strlen(BATCH_TAIL) > b->limit) {
+        fail(buf, cap);
+        return false;
+    }
+    b->len = w.len;
+    return true;
+}
+
+ble_batch_result_t ble_batch_add(ble_batch_t *b, const ble_reading_t *r) {
+    // The address must already be a hash. A raw address in any printed form
+    // fails this check, so it can never be published by mistake.
+    if (r->ts_ms < CONTRACT_MIN_TS_MS || r->ts_ms > CONTRACT_MAX_TS_MS ||
+        !addr_hash_is_valid(r->addr, strlen(r->addr)) || !rssi_in_range(r->rssi)) {
+        return BLE_BATCH_INVALID;
+    }
+    char tmp[READING_MAX_LEN];
+    writer_t w = writer(tmp, sizeof(tmp));
+    put_raw(&w, "{\"ts\":");
+    put_u64(&w, r->ts_ms);
     put_raw(&w, ",\"addr\":");
-    put_string(&w, addr);
+    put_string(&w, r->addr);
     put_raw(&w, ",\"rssi\":");
-    put_int(&w, rssi);
+    put_int(&w, r->rssi);
     put_raw(&w, ",\"mfr\":");
-    if (has_mfr) {
+    if (r->has_mfr) {
         char id[7];
-        adv_format_company_id(mfr, id);
+        adv_format_company_id(r->mfr, id);
         put_string(&w, id);
     } else {
         put_raw(&w, "null");
     }
     put_char(&w, '}');
-    return finish(&w);
+    if (!w.ok) {
+        return BLE_BATCH_INVALID;
+    }
+
+    size_t comma = b->count > 0 ? 1 : 0;
+    if (b->len + comma + w.len + strlen(BATCH_TAIL) > b->limit) {
+        // In an empty message it can never fit, so do not ask for another.
+        return b->count > 0 ? BLE_BATCH_FULL : BLE_BATCH_INVALID;
+    }
+    if (comma) {
+        b->buf[b->len++] = ',';
+    }
+    memcpy(b->buf + b->len, tmp, w.len);
+    b->len += w.len;
+    b->count++;
+    return BLE_BATCH_ADDED;
+}
+
+size_t ble_batch_finish(ble_batch_t *b) {
+    if (b->count == 0) {
+        b->buf[0] = '\0';
+        return 0;
+    }
+    memcpy(b->buf + b->len, BATCH_TAIL, sizeof(BATCH_TAIL));  // with the NUL
+    return b->len + strlen(BATCH_TAIL);
 }
 
 size_t payload_spectrum(char *buf, size_t cap, uint64_t ts_ms, const char *node,

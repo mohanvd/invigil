@@ -43,6 +43,8 @@ def check(path: Path) -> list[str]:
                 node, kind = contract.parse_topic(topic)
                 payload = json.loads(raw, object_pairs_hook=no_duplicate_keys)
                 contract.validate(kind, payload, node)
+                if kind == "ble" and len(raw.encode("utf-8")) > contract.MAX_BLE_PAYLOAD_BYTES:
+                    raise ValueError(f"ble payload is over {contract.MAX_BLE_PAYLOAD_BYTES} bytes")
                 kinds[kind] += 1
             elif fields[0] == "hash" and len(fields) == 4:
                 _, salt_hex, addr_hex, firmware_hash = fields

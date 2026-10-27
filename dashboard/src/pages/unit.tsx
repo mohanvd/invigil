@@ -133,7 +133,7 @@ export function UnitPage() {
         <dl className="grid grid-cols-4 gap-px border-b bg-border">
           {(
             [
-              ["BLE", hall.counts.ble],
+              ["BLE readings", hall.counts.ble],
               ["Spectrum", hall.counts.spectrum],
               ["Status", hall.counts.status],
               ["Rejected", hall.rejected.count],

@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ble_ring.h"
 #include "spectrum.h"
 
 // Limits from server/contract.py.
@@ -23,9 +24,15 @@
 #define CONTRACT_MAX_UPTIME_S 2147483647UL
 #define CONTRACT_MAX_FW_LEN 32
 
+// The longest ble payload the unit sends, MAX_BLE_PAYLOAD_BYTES in
+// server/contract.py. With the MQTT header and topic it fits one TCP segment
+// (TCP_MSS 1460), and lwIP's MQTT output buffer holds several at once
+// (docs/contract.md, Size limit).
+#define CONTRACT_MAX_BLE_PAYLOAD 1400
+
 // Buffer sizes that fit the largest valid message of each kind.
 #define TOPIC_MAX_LEN 64
-#define PAYLOAD_BLE_MAX_LEN 128
+#define PAYLOAD_BLE_MAX_LEN (CONTRACT_MAX_BLE_PAYLOAD + 1)  // plus the NUL
 #define PAYLOAD_STATUS_MAX_LEN 160
 #define PAYLOAD_SPECTRUM_MAX_LEN 1024  // 126 counts of up to 5 digits plus commas
 
@@ -35,10 +42,33 @@ bool payload_node_is_valid(const char *node);
 // "invigil/node/{node}/{kind}" with kind "ble", "spectrum" or "status".
 size_t payload_topic(char *buf, size_t cap, const char *node, const char *kind);
 
-// {"ts":...,"node":"N1","addr":"a91f03c2d4e8","rssi":-58,"mfr":"0x004C"}
-// addr must be a 12-char lowercase hex hash. mfr is null when has_mfr is false.
-size_t payload_ble(char *buf, size_t cap, uint64_t ts_ms, const char *node, const char *addr,
-                   int rssi, bool has_mfr, uint16_t mfr);
+// One ble message, built one reading at a time:
+// {"ts":...,"node":"N1","readings":[{"ts":...,"addr":"a91f03c2d4e8","rssi":-58,"mfr":"0x004C"},...]}
+// ts is the end of the scan window. Each reading keeps its own ts. A reading's
+// addr must be a 12-char lowercase hex hash, and mfr is null when has_mfr is
+// false. The finished message is at most min(cap - 1, CONTRACT_MAX_BLE_PAYLOAD)
+// bytes.
+typedef struct {
+    char *buf;
+    size_t limit;    // longest message allowed, not counting the NUL
+    size_t len;      // bytes written so far, without the closing "]}"
+    uint32_t count;  // readings in the message
+} ble_batch_t;
+
+typedef enum {
+    BLE_BATCH_ADDED,    // the reading is in the message
+    BLE_BATCH_FULL,     // it does not fit: send this message, then start another
+    BLE_BATCH_INVALID,  // off contract, or too big even for an empty message: never sendable
+} ble_batch_result_t;
+
+// Starts a message. False if ts or node is off contract or the buffer is too
+// small for an empty message; the batch must not be used then.
+bool ble_batch_begin(ble_batch_t *b, char *buf, size_t cap, uint64_t ts_ms, const char *node);
+// Adds one reading. A reading that is FULL or INVALID leaves the message unchanged.
+ble_batch_result_t ble_batch_add(ble_batch_t *b, const ble_reading_t *r);
+// Closes the message and returns its length, or 0 (and an empty string) if
+// it has no readings.
+size_t ble_batch_finish(ble_batch_t *b);
 
 // {"ts":...,"node":"N1","sweeps":50,"hits":[126 integers]}
 size_t payload_spectrum(char *buf, size_t cap, uint64_t ts_ms, const char *node,

@@ -78,7 +78,7 @@ def render(
                 f"fw {s['fw']}, {view.status_age_s:.0f} s ago"
             )
         rates = ", ".join(f"{k} {fmt_rate(view.rates[k])}" for k in contract.KINDS)
-        lines.append(f"Messages     {rates}, rejected {mon.rejected}")
+        lines.append(f"Readings     {rates}, rejected messages {mon.rejected}")
     lines.append(f"Laptop clock {clock.describe()}")
     return "\n".join(lines)
 
