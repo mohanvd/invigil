@@ -41,12 +41,18 @@
 // Starting guess, to be measured.
 #define SCAN_WINDOW_MS 1000
 // Longest send window: publish the window's readings, then wait until
-// everything has left lwIP. Starting guess, to be measured.
-#define SEND_WINDOW_MAX_MS 300
+// everything has left lwIP. 300 ms ran out with about 130 BLE readings a
+// second around the unit (2026-10-27), so 500. To be measured again.
+#define SEND_WINDOW_MAX_MS 500
 // Part of the send window kept for the last messages to leave lwIP. No new
 // message is handed to MQTT after SEND_WINDOW_MAX_MS - SEND_DRAIN_MS.
 // Starting guess, to be measured.
 #define SEND_DRAIN_MS 50
+// A send window that has not drained by SEND_WINDOW_MAX_MS keeps waiting
+// (and counts as an overrun): a scan window never starts while MQTT is still
+// sending. After this long the cycle hands back to housekeeping so a stuck
+// connection can time out, but the next scan still waits for the drain.
+#define SEND_OVERRUN_GIVE_UP_MS 5000
 // Quiet time after the last publish has left lwIP, before the next scan
 // window, so the radio has finished transmitting. Starting guess, to be measured.
 #define QUIET_GAP_MS 50
