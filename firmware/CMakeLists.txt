@@ -39,7 +39,7 @@ endif()
 
 include(pico_sdk_import.cmake)
 
-project(invigil_fw VERSION 0.1.0 LANGUAGES C CXX ASM)
+project(invigil_fw VERSION 0.1.1 LANGUAGES C CXX ASM)
 
 pico_sdk_init()
 

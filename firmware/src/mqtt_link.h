@@ -26,9 +26,9 @@ const char *mqtt_link_state_name(void);
 // lock is recursive, so it may also be called with the lock already held.
 mqtt_pub_result_t mqtt_link_publish(const char *topic, const char *payload, size_t len);
 
-// True when everything handed to mqtt_link_publish() has left lwIP for the
-// radio: the MQTT output buffer is empty and TCP has no unsent segments.
-// Acknowledgements may still be on their way back.
+// True when everything handed to mqtt_link_publish() has left lwIP and the
+// broker has acknowledged it: the MQTT output buffer is empty and TCP has no
+// unsent or unacknowledged segments, so TCP has nothing left to send again.
 bool mqtt_link_drained(void);
 
 #endif

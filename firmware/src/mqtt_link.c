@@ -191,7 +191,10 @@ bool mqtt_link_drained(void) {
     cyw43_arch_lwip_begin();
     bool drained = true;
     if (client.conn != NULL) {
-        drained = client.output.put == client.output.get && client.conn->unsent == NULL;
+        // unacked too: a segment still waiting for its ack can be sent again
+        // by TCP at any moment, which could land in the next scan window.
+        drained = client.output.put == client.output.get && client.conn->unsent == NULL &&
+                  client.conn->unacked == NULL;
     }
     cyw43_arch_lwip_end();
     return drained;

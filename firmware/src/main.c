@@ -4,6 +4,8 @@
 //   1. Scan window: BLE scan on, nRF sweeps back to back, no MQTT traffic.
 //   2. Send window: BLE scan off, sweeps stopped. Publish the window's
 //      spectrum message, then buffered BLE readings, then status if due.
+//      It ends when everything has left lwIP, even if that takes longer
+//      than SEND_WINDOW_MAX_MS (counted as an overrun).
 //   3. Quiet gap, then the next scan window.
 // The cycle only runs while Wi-Fi is up, the clock is set and MQTT is
 // connected. Reconnecting happens between cycles, never inside a scan window.
@@ -242,7 +244,14 @@ static void send_window(uint64_t scan_end_ms) {
         sleep_us(200);
     }
     if (!mqtt_link_drained()) {
+        // Over the limit. Keep waiting rather than start scanning while the
+        // unit is still sending, and count it so the window can be tuned.
         stats.send_overruns++;
+        absolute_time_t give_up = delayed_by_ms(start, SEND_OVERRUN_GIVE_UP_MS);
+        while (!mqtt_link_drained() && !time_reached(give_up)) {
+            tick();
+            sleep_us(200);
+        }
     }
 
     uint32_t send_ms = (uint32_t)(absolute_time_diff_us(start, get_absolute_time()) / 1000);
@@ -338,7 +347,9 @@ int main(void) {
 
     for (;;) {
         housekeeping();
-        if (running()) {
+        // A scan window only starts once everything from the last send window
+        // has left lwIP, even after an overrun gave up waiting.
+        if (running() && mqtt_link_drained()) {
             run_cycle();
         } else {
             sleep_ms(10);
