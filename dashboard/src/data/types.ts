@@ -87,6 +87,7 @@ export interface HallState {
   alerts: Alert[]
   /** Latest detection per device, including allowed ones. */
   detections: Record<string, Detection>
+  /** ble counts readings, the rest count messages. */
   counts: { ble: number; spectrum: number; status: number; detection: number }
   rejected: { count: number; reasons: RejectReason[] }
   /** Receive time of each recent message, oldest first. */

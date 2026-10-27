@@ -14,12 +14,19 @@ export const NUM_CHANNELS = 126
 export const MIN_TS_MS = 1_600_000_000_000
 export const MAX_TS_MS = 9_999_999_999_999
 
-export interface BleMessage {
+/** One advertisement inside a ble message. */
+export interface BleReading {
   ts: number
-  node: string
   addr: string
   rssi: number
   mfr: string | null
+}
+
+/** All the readings from one scan window, or part of them (see MAX_BLE_PAYLOAD_BYTES). */
+export interface BleMessage {
+  ts: number
+  node: string
+  readings: BleReading[]
 }
 
 export interface SpectrumMessage {
@@ -46,12 +53,16 @@ export interface MessageByKind {
 export type Kind = keyof MessageByKind
 
 export const FIELDS: { readonly [K in Kind]: readonly (keyof MessageByKind[K] & string)[] } = {
-  ble: ["ts", "node", "addr", "rssi", "mfr"],
+  ble: ["ts", "node", "readings"],
   spectrum: ["ts", "node", "sweeps", "hits"],
   status: ["ts", "node", "uptime_s", "wifi_rssi", "fw"],
 }
 
 export const KINDS = Object.keys(FIELDS) as Kind[]
+
+export const READING_FIELDS: readonly (keyof BleReading & string)[] = ["ts", "addr", "rssi", "mfr"]
+/** The unit keeps every ble payload at or under this many bytes (docs/contract.md, Size limit). */
+export const MAX_BLE_PAYLOAD_BYTES = 1400
 
 export type ContractMessage = {
   [K in Kind]: { kind: K; node: string; payload: MessageByKind[K] }
@@ -103,6 +114,46 @@ function checkInt(
   return null
 }
 
+/** what is "" for the message itself, or "reading" for one reading inside it. */
+function checkFields(p: Record<string, unknown>, expected: readonly string[], what: string): string | null {
+  const missing = expected.filter((k) => !Object.hasOwn(p, k))
+  if (missing.length > 0) {
+    return `${what ? `${what} is missing` : "missing"} field(s): ${missing.join(", ")}`
+  }
+  const extra = Object.keys(p)
+    .filter((k) => !expected.includes(k))
+    .sort()
+  if (extra.length > 0) {
+    return `${what ? `${what} has unexpected` : "unexpected"} field(s): ${extra.join(", ")}`
+  }
+  return null
+}
+
+function readingProblem(reading: unknown): string | null {
+  if (typeof reading !== "object" || reading === null || Array.isArray(reading)) {
+    return "each reading must be a JSON object"
+  }
+  const r = reading as Record<string, unknown>
+  const fieldsError = checkFields(r, READING_FIELDS, "reading")
+  if (fieldsError) return fieldsError
+
+  const tsError = checkInt(r, "ts", 0, MAX_TS_MS)
+  if (tsError) return `reading ${tsError}`
+  if ((r.ts as number) < MIN_TS_MS) {
+    return "reading ts is too small: unit clock not synced, or seconds sent instead of ms"
+  }
+  if (typeof r.addr !== "string" || !ADDR_RE.test(r.addr)) {
+    return "reading addr must be a hashed address: 12 lowercase hex chars"
+  }
+  const rssiError = checkInt(r, "rssi", -127, 0)
+  if (rssiError) return `reading ${rssiError}`
+  // null is allowed: many advertisements carry no manufacturer data.
+  if (r.mfr !== null && (typeof r.mfr !== "string" || !MFR_RE.test(r.mfr))) {
+    return 'reading mfr must be null or a company ID like "0x004C"'
+  }
+  return null
+}
+
 /** Check a decoded JSON payload against the contract. */
 export function validate<K extends Kind>(
   kind: K,
@@ -114,13 +165,8 @@ export function validate<K extends Kind>(
   }
   const p = payload as Record<string, unknown>
 
-  const expected: readonly string[] = FIELDS[kind]
-  const missing = expected.filter((k) => !Object.hasOwn(p, k))
-  if (missing.length > 0) return fail(`missing field(s): ${missing.join(", ")}`)
-  const extra = Object.keys(p)
-    .filter((k) => !expected.includes(k))
-    .sort()
-  if (extra.length > 0) return fail(`unexpected field(s): ${extra.join(", ")}`)
+  const fieldsError = checkFields(p, FIELDS[kind], "")
+  if (fieldsError) return fail(fieldsError)
 
   const tsError = checkInt(p, "ts", 0, MAX_TS_MS)
   if (tsError) return fail(tsError)
@@ -135,14 +181,13 @@ export function validate<K extends Kind>(
   }
 
   if (kind === "ble") {
-    if (typeof p.addr !== "string" || !ADDR_RE.test(p.addr)) {
-      return fail("addr must be a hashed address: 12 lowercase hex chars")
+    const readings = p.readings
+    if (!Array.isArray(readings) || readings.length === 0) {
+      return fail("readings must be a list of one or more readings")
     }
-    const rssiError = checkInt(p, "rssi", -127, 0)
-    if (rssiError) return fail(rssiError)
-    // null is allowed: many advertisements carry no manufacturer data.
-    if (p.mfr !== null && (typeof p.mfr !== "string" || !MFR_RE.test(p.mfr))) {
-      return fail('mfr must be null or a company ID like "0x004C"')
+    for (const reading of readings) {
+      const problem = readingProblem(reading)
+      if (problem) return fail(problem)
     }
   } else if (kind === "spectrum") {
     const sweepsError = checkInt(p, "sweeps", 1, 65_535)
@@ -168,6 +213,37 @@ export function validate<K extends Kind>(
   }
 
   return { ok: true, value: p as unknown as MessageByKind[K] }
+}
+
+/**
+ * Split readings into as few ble messages as fit maxBytes each, in order.
+ * Sizes are those of compact JSON, which is what JSON.stringify writes.
+ * Mirrors pack_ble() in server/contract.py.
+ */
+export function packBle(
+  ts: number,
+  node: string,
+  readings: readonly BleReading[],
+  maxBytes = MAX_BLE_PAYLOAD_BYTES
+): BleMessage[] {
+  const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length
+  const empty = bytes({ ts, node, readings: [] })
+  const messages: BleMessage[] = []
+  let current: BleReading[] = []
+  let size = empty
+  for (const reading of readings) {
+    let add = bytes(reading) + (current.length > 0 ? 1 : 0) // 1 for the comma
+    if (current.length > 0 && size + add > maxBytes) {
+      messages.push({ ts, node, readings: current })
+      current = []
+      size = empty
+      add -= 1
+    }
+    current.push(reading)
+    size += add
+  }
+  if (current.length > 0) messages.push({ ts, node, readings: current })
+  return messages
 }
 
 /** Parse and check one raw MQTT message. Never throws. */

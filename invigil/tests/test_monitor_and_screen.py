@@ -10,8 +10,9 @@ def status(uptime=3725, rssi=-43):
     return json.dumps({"ts": TS, "node": "N1", "uptime_s": uptime, "wifi_rssi": rssi, "fw": "0.1.0"}).encode()
 
 
-def ble():
-    return json.dumps({"ts": TS, "node": "N1", "addr": "a91f03c2d4e8", "rssi": -60, "mfr": None}).encode()
+def ble(n=1):
+    readings = [{"ts": TS, "addr": "a91f03c2d4e8", "rssi": -60, "mfr": None}] * n
+    return json.dumps({"ts": TS, "node": "N1", "readings": readings}).encode()
 
 
 def test_rates_count_the_last_window_only():
@@ -22,6 +23,13 @@ def test_rates_count_the_last_window_only():
     view = mon.view("N1", now=110)
     assert view.rates["ble"] == 5.0
     assert view.rates["spectrum"] == 0.0
+
+
+def test_ble_rate_counts_readings_not_messages():
+    mon = monitor.UnitMonitor(window_s=10)
+    for i in range(10):
+        mon.handle("invigil/node/N1/ble", ble(n=7), now=100 + i)  # one message a second, 7 readings each
+    assert mon.view("N1", now=110).rates["ble"] == 7.0
 
 
 def test_rates_use_the_time_listened_when_shorter_than_the_window():
@@ -61,7 +69,7 @@ def test_status_screen_shows_every_line():
     assert "Logger       not running" in screen
     assert "Unit N1      online" in screen
     assert "uptime 1h 02m, Wi-Fi RSSI -43 dBm, fw 0.1.0, 4 s ago" in screen
-    assert "rejected 0" in screen
+    assert "rejected messages 0" in screen
     assert "1450 ms behind pool.ntp.org" in screen and "WARNING" in screen
 
 

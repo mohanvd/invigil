@@ -13,7 +13,6 @@ models on fake data.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import math
 import os
@@ -34,7 +33,7 @@ from server.config import load_config
 
 log = logging.getLogger("invigil.fake")
 
-FAKE_FW = "0.1.0-fake"  # shows up in status.csv, so fake runs are easy to spot
+FAKE_FW = "0.2.0-fake"  # shows up in status.csv, so fake runs are easy to spot
 
 # Distance bands from docs/data-protocol.md: (name, upper edge in metres).
 BANDS = (("near", 1.0), ("mid", 2.0), ("far", 3.5))
@@ -143,8 +142,10 @@ def simulate_window(node: str, t0: int, t1: int, devices: list[Device],
                     sweeps: int, rng: random.Random) -> list[tuple[str, dict]]:
     """Messages the unit sends after scanning from t0 to t1 (ms since epoch).
 
-    BLE readings carry the time each advertisement was heard. The spectrum
-    message covers the whole scan window and carries its end time.
+    BLE readings carry the time each advertisement was heard, and go out
+    together in as few ble messages as fit the size limit, each carrying the
+    end of the scan window. The spectrum message covers the whole scan window
+    and carries its end time.
     """
     ble = []
     for dev in devices:
@@ -160,10 +161,10 @@ def simulate_window(node: str, t0: int, t1: int, devices: list[Device],
             rssi = dev.rssi_1m - path_loss_db(dev.distance_m) + rng.gauss(0, RSSI_NOISE_DB)
             if rssi < BLE_SENSITIVITY_DBM or rng.random() > BLE_CATCH_RATE:
                 continue
-            ble.append({"ts": int(t), "node": node, "addr": dev.addr,
+            ble.append({"ts": int(t), "addr": dev.addr,
                         "rssi": max(-127, min(0, round(rssi))), "mfr": dev.mfr})
-    ble.sort(key=lambda m: m["ts"])
-    msgs = [("ble", m) for m in ble]
+    ble.sort(key=lambda r: r["ts"])
+    msgs = [("ble", m) for m in contract.pack_ble(t1, node, ble)]
     hits = spectrum_hits(devices, sweeps, rng)
     msgs.append(("spectrum", {"ts": t1, "node": node, "sweeps": sweeps, "hits": hits}))
     return msgs
@@ -271,7 +272,7 @@ def main(argv: list[str] | None = None) -> None:
 
     def send(kind: str, payload: dict) -> None:
         contract.validate(kind, payload, payload["node"])  # never publish anything off-contract
-        client.publish(contract.topic(payload["node"], kind), json.dumps(payload, separators=(",", ":")))
+        client.publish(contract.topic(payload["node"], kind), contract.encode(payload))
 
     log.info("fake unit %s publishing to %s:%d (scan %d ms, send %d ms, %d sweeps)",
              ", ".join(contract.NODE_IDS), host, port, args.scan_ms, args.send_ms, args.sweeps)

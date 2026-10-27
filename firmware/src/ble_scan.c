@@ -203,8 +203,8 @@ void ble_scan_stop(void) {
     async_context_release_lock(context);
 }
 
-bool ble_scan_peek_locked(ble_reading_t *out) {
-    return ble_ring_peek(&ring, out);
+bool ble_scan_peek_at_locked(uint32_t i, ble_reading_t *out) {
+    return ble_ring_peek_at(&ring, i, out);
 }
 
 void ble_scan_pop_locked(void) {

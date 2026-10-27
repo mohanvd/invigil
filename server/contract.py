@@ -8,6 +8,7 @@ runs every message through it before sending, so the two can never drift apart.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 
 TOPIC_ROOT = "invigil/node"
@@ -17,11 +18,19 @@ NODE_IDS = ("N1",)
 NUM_CHANNELS = 126  # nRF24L01 channels 0..125, channel c is 2400 + c MHz
 
 FIELDS = {
-    "ble": ("ts", "node", "addr", "rssi", "mfr"),
+    "ble": ("ts", "node", "readings"),
     "spectrum": ("ts", "node", "sweeps", "hits"),
     "status": ("ts", "node", "uptime_s", "wifi_rssi", "fw"),
 }
 KINDS = tuple(FIELDS)
+
+# One advertisement inside a ble message.
+READING_FIELDS = ("ts", "addr", "rssi", "mfr")
+# One row of ble.csv: the message's node plus one reading.
+BLE_ROW_FIELDS = ("ts", "node", "addr", "rssi", "mfr")
+# The unit keeps every ble payload at or under this many bytes, so one message
+# fits one TCP segment (docs/contract.md, Size limit).
+MAX_BLE_PAYLOAD_BYTES = 1400
 
 # Timestamps are milliseconds since epoch. A value below MIN_TS_MS means the
 # node has not synced NTP yet, or it sent seconds instead of milliseconds.
@@ -84,14 +93,11 @@ def validate(kind: str, payload: object, node: str | None = None) -> dict:
         raise ContractError("node in payload does not match node in topic")
 
     if kind == "ble":
-        addr = payload["addr"]
-        if not isinstance(addr, str) or not _ADDR_RE.fullmatch(addr):
-            raise ContractError("addr must be a hashed address: 12 lowercase hex chars")
-        _int(payload, "rssi", -127, 0)
-        mfr = payload["mfr"]
-        # null is allowed: many advertisements carry no manufacturer data.
-        if mfr is not None and (not isinstance(mfr, str) or not _MFR_RE.fullmatch(mfr)):
-            raise ContractError('mfr must be null or a company ID like "0x004C"')
+        readings = payload["readings"]
+        if not isinstance(readings, list) or not readings:
+            raise ContractError("readings must be a list of one or more readings")
+        for reading in readings:
+            _validate_reading(reading)
 
     elif kind == "spectrum":
         sweeps = _int(payload, "sweeps", 1, 65_535)
@@ -112,13 +118,69 @@ def validate(kind: str, payload: object, node: str | None = None) -> dict:
     return payload
 
 
-def _int(payload: dict, key: str, lo: int, hi: int) -> int:
+def _validate_reading(reading: object) -> None:
+    if not isinstance(reading, dict):
+        raise ContractError("each reading must be a JSON object")
+    missing = [k for k in READING_FIELDS if k not in reading]
+    if missing:
+        raise ContractError(f"reading is missing field(s): {', '.join(missing)}")
+    extra = sorted(k for k in reading if k not in READING_FIELDS)
+    if extra:
+        raise ContractError(f"reading has unexpected field(s): {', '.join(extra)}")
+
+    ts = _int(reading, "ts", 0, MAX_TS_MS, "reading ")
+    if ts < MIN_TS_MS:
+        raise ContractError("reading ts is too small: node clock not synced with NTP, or seconds sent instead of ms")
+    addr = reading["addr"]
+    if not isinstance(addr, str) or not _ADDR_RE.fullmatch(addr):
+        raise ContractError("reading addr must be a hashed address: 12 lowercase hex chars")
+    _int(reading, "rssi", -127, 0, "reading ")
+    mfr = reading["mfr"]
+    # null is allowed: many advertisements carry no manufacturer data.
+    if mfr is not None and (not isinstance(mfr, str) or not _MFR_RE.fullmatch(mfr)):
+        raise ContractError('reading mfr must be null or a company ID like "0x004C"')
+
+
+def ble_rows(payload: dict) -> list[dict]:
+    """One dict per reading of a validated ble message, with BLE_ROW_FIELDS keys."""
+    return [{"node": payload["node"], **reading} for reading in payload["readings"]]
+
+
+def pack_ble(ts: int, node: str, readings: list[dict],
+             max_bytes: int = MAX_BLE_PAYLOAD_BYTES) -> list[dict]:
+    """Split readings into as few ble messages as fit max_bytes each, in order.
+
+    Sizes are those of compact JSON (no spaces), which is what the unit and
+    the fake publisher send.
+    """
+    empty = len(encode({"ts": ts, "node": node, "readings": []}))
+    messages = []
+    current: list[dict] = []
+    size = empty
+    for reading in readings:
+        add = len(encode(reading)) + (1 if current else 0)  # 1 for the comma
+        if current and size + add > max_bytes:
+            messages.append({"ts": ts, "node": node, "readings": current})
+            current, size, add = [], empty, add - 1
+        current.append(reading)
+        size += add
+    if current:
+        messages.append({"ts": ts, "node": node, "readings": current})
+    return messages
+
+
+def encode(payload: dict) -> bytes:
+    """Compact JSON, the form every publisher sends."""
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def _int(payload: dict, key: str, lo: int, hi: int, prefix: str = "") -> int:
     value = payload[key]
     # bool is a subclass of int in Python, but true/false is never a valid reading.
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ContractError(f"{key} must be an integer")
+        raise ContractError(f"{prefix}{key} must be an integer")
     if not lo <= value <= hi:
-        raise ContractError(f"{key} is out of range {lo}..{hi}")
+        raise ContractError(f"{prefix}{key} is out of range {lo}..{hi}")
     return value
 
 

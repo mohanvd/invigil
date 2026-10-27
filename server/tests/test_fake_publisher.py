@@ -23,6 +23,33 @@ def test_every_message_follows_the_contract():
         for kind, payload in msgs:
             contract.validate(kind, payload, payload["node"])
             assert t0 <= payload["ts"] <= t1  # nothing from the send window
+            if kind == "ble":
+                assert payload["ts"] == t1  # end of the scan window
+                assert all(t0 <= r["ts"] < t1 for r in payload["readings"])
+                assert len(contract.encode(payload)) <= contract.MAX_BLE_PAYLOAD_BYTES
+
+
+def test_ble_readings_are_batched_in_time_order():
+    _, windows = run_windows(30)
+    for _, _, msgs in windows:
+        ble = [p for k, p in msgs if k == "ble"]
+        readings = [r["ts"] for p in ble for r in p["readings"]]
+        assert readings == sorted(readings)
+        # Every message but the last is full enough that splitting was needed.
+        assert len(ble) <= 1 + len(readings) // 19
+
+
+def test_a_busy_window_is_split_under_the_size_limit():
+    rng = random.Random(3)
+    devices = default_devices("test-salt", rng)
+    for d in devices:
+        if d.adv_interval_ms:
+            d.adv_interval_ms = 20  # far busier than any real device
+    msgs = simulate_window("N1", T0, T0 + 800, devices, 20, rng)
+    ble = [p for k, p in msgs if k == "ble"]
+    assert len(ble) > 1
+    for p in ble:
+        assert len(contract.encode(p)) <= contract.MAX_BLE_PAYLOAD_BYTES
 
 
 def test_one_spectrum_message_per_window():
@@ -35,7 +62,7 @@ def test_only_advertising_devices_show_up_in_ble():
     devices, windows = run_windows(30)
     advertising = {d.addr for d in devices if d.adv_interval_ms}
     silent = {d.addr for d in devices if not d.adv_interval_ms}
-    seen = {p["addr"] for _, _, msgs in windows for k, p in msgs if k == "ble"}
+    seen = {r["addr"] for _, _, msgs in windows for k, p in msgs if k == "ble" for r in p["readings"]}
     assert seen == advertising
     assert not seen & silent
 

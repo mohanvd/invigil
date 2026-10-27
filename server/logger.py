@@ -5,7 +5,8 @@ Run from the repo root:
 
 Writes data/raw/<date>-<session>/ble.csv, spectrum.csv and status.csv.
 Each row starts with rx_ts, the laptop time (ms since epoch) when the message
-arrived, so rx_ts - ts is the node-to-laptop latency.
+arrived, so rx_ts - ts is the node-to-laptop latency. A ble message carries
+several readings; each reading gets its own row with its own ts.
 
 Messages that break the MQTT contract are counted and reported on the console
 but never written to disk, so a firmware bug cannot leak raw data into a file.
@@ -34,7 +35,7 @@ from server.config import load_config
 log = logging.getLogger("invigil.logger")
 
 COLUMNS = {
-    "ble": ["rx_ts", *contract.FIELDS["ble"]],
+    "ble": ["rx_ts", *contract.BLE_ROW_FIELDS],
     "spectrum": ["rx_ts", "ts", "node", "sweeps"]
     + [f"ch{c:03d}" for c in range(contract.NUM_CHANNELS)],
     "status": ["rx_ts", *contract.FIELDS["status"]],
@@ -45,11 +46,14 @@ def now_ms() -> int:
     return time.time_ns() // 1_000_000
 
 
-def to_row(kind: str, payload: dict, rx_ts: int) -> list:
+def to_rows(kind: str, payload: dict, rx_ts: int) -> list[list]:
+    """CSV rows for one valid message: one per reading for ble, else one."""
     if kind == "spectrum":
-        return [rx_ts, payload["ts"], payload["node"], payload["sweeps"], *payload["hits"]]
+        return [[rx_ts, payload["ts"], payload["node"], payload["sweeps"], *payload["hits"]]]
     # A null mfr is written as an empty cell.
-    return [rx_ts, *(payload[k] for k in contract.FIELDS[kind])]
+    if kind == "ble":
+        return [[rx_ts, *(r[k] for k in contract.BLE_ROW_FIELDS)] for r in contract.ble_rows(payload)]
+    return [[rx_ts, *(payload[k] for k in contract.FIELDS[kind])]]
 
 
 class CsvSink:
@@ -88,7 +92,7 @@ class Recorder:
         self.sink = sink
         self.total = 0
         self._lock = threading.Lock()
-        self._accepted = Counter()  # (node, kind) -> count since last report
+        self._accepted = Counter()  # (node, kind) -> rows written since last report
         self._rejected = Counter()  # reason -> count since last report
         self._latencies = []  # rx_ts - ts, ms, since last report
         self._warned = set()
@@ -107,11 +111,13 @@ class Recorder:
                 log.warning("rejected %s: %s (repeats are only counted)", topic, reason)
             return False
 
+        rows = to_rows(kind, payload, rx_ts)
         with self._lock:
-            self.sink.write(kind, to_row(kind, payload, rx_ts))
-            self.total += 1
-            self._accepted[(node, kind)] += 1
-            self._latencies.append(rx_ts - payload["ts"])
+            for row in rows:
+                self.sink.write(kind, row)
+                self._latencies.append(rx_ts - row[1])  # row[1] is ts
+            self.total += len(rows)
+            self._accepted[(node, kind)] += len(rows)
         return True
 
     def report(self) -> str:

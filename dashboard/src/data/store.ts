@@ -149,21 +149,22 @@ export function createHallStore(options: StoreOptions = {}): HallStore {
       received(rxTs)
 
       if (msg.kind === "ble") {
-        const { addr, rssi, mfr, ts } = msg.payload
-        const previous: HeardDevice | undefined = state.heard[addr]
-        const readings = previous ? previous.readings.slice(-(MAX_READINGS_PER_DEVICE - 1)) : []
-        readings.push({ ts, rssi })
-        state.heard = {
-          ...state.heard,
-          [addr]: {
+        // One message carries a whole scan window. Each reading counts on its own.
+        const heard = { ...state.heard }
+        for (const { addr, rssi, mfr, ts } of msg.payload.readings) {
+          const previous: HeardDevice | undefined = heard[addr]
+          const readings = previous ? previous.readings.slice(-(MAX_READINGS_PER_DEVICE - 1)) : []
+          readings.push({ ts, rssi })
+          heard[addr] = {
             addr,
             mfr: mfr ?? previous?.mfr ?? null,
             count: (previous?.count ?? 0) + 1,
             lastTs: Math.max(ts, previous?.lastTs ?? 0),
             readings,
-          },
+          }
         }
-        state.counts = { ...state.counts, ble: state.counts.ble + 1 }
+        state.heard = heard
+        state.counts = { ...state.counts, ble: state.counts.ble + msg.payload.readings.length }
       } else if (msg.kind === "spectrum") {
         state.spectrum = msg.payload
         state.counts = { ...state.counts, spectrum: state.counts.spectrum + 1 }

@@ -31,6 +31,8 @@ typedef struct {
 void ble_ring_init(ble_ring_t *ring, ble_reading_t *storage, uint32_t capacity);
 void ble_ring_push(ble_ring_t *ring, const ble_reading_t *reading);
 bool ble_ring_peek(const ble_ring_t *ring, ble_reading_t *out);  // copies the oldest
+// Copies the reading i places after the oldest (0 is the oldest). False past the end.
+bool ble_ring_peek_at(const ble_ring_t *ring, uint32_t i, ble_reading_t *out);
 void ble_ring_pop(ble_ring_t *ring);                              // removes the oldest
 
 #endif

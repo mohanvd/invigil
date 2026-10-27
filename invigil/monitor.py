@@ -1,4 +1,7 @@
-"""Watch the unit's MQTT traffic: online or not, last status, message rates.
+"""Watch the unit's MQTT traffic: online or not, last status, reading rates.
+
+The ble rate counts readings (advertisements), not messages: one ble message
+carries all the readings from a scan window.
 
 Every message goes through server/contract.py, the same check the logger
 uses, so a message the logger would reject is counted as rejected here too.
@@ -51,8 +54,9 @@ class UnitMonitor:
             with self._lock:
                 self.rejected += 1
             return False
+        count = len(payload["readings"]) if kind == "ble" else 1
         with self._lock:
-            self._times[(node, kind)].append(now)
+            self._times[(node, kind)].extend([now] * count)
             if kind == "status":
                 self._status[node] = (payload, now)
         if kind == "status":

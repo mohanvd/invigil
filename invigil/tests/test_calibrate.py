@@ -15,8 +15,8 @@ RSSI_AT = {0.5: -48, 1.0: -55, 1.5: -60, 2.0: -64, 2.5: -68, 3.0: -71, 3.5: -74}
 
 
 def ble(addr, rssi, i):
-    msg = {"ts": TS + i * 100, "node": "N1", "addr": addr, "rssi": rssi, "mfr": "0x004C"}
-    return json.dumps(msg).encode()
+    reading = {"ts": TS + i * 100, "addr": addr, "rssi": rssi, "mfr": "0x004C"}
+    return json.dumps({"ts": TS + i * 100 + 50, "node": "N1", "readings": [reading]}).encode()
 
 
 class FakeUnit:

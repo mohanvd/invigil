@@ -5,15 +5,15 @@
 // data has the right shape, not the right physics: every constant below is the
 // same placeholder guess the fake publisher uses, not a measurement.
 
-import { NUM_CHANNELS, topic } from "../contract"
-import type { BleMessage, SpectrumMessage, StatusMessage } from "../contract"
+import { NUM_CHANNELS, packBle, topic } from "../contract"
+import type { BleReading, SpectrumMessage, StatusMessage } from "../contract"
 import type { Band, Detection, DeviceType } from "../types"
 import { BAND_EDGES_M } from "../types"
 import { createRng } from "./rng"
 import type { Rng } from "./rng"
 
 export const DEMO_NODE = "N1"
-export const DEMO_FW = "0.1.0-demo"
+export const DEMO_FW = "0.2.0-demo"
 export const SCAN_MS = 800
 export const SEND_MS = 200
 export const CYCLE_MS = SCAN_MS + SEND_MS
@@ -188,7 +188,7 @@ export function createDemoGenerator(seed: number, epoch: number): DemoGenerator 
     const rxTs = t1 + Math.round(rng.uniform(60, 300))
     const out: DemoCycle = { messages: [], detections: [] }
 
-    const ble: BleMessage[] = []
+    const ble: BleReading[] = []
     for (const dev of devices) {
       const heard: number[] = []
       const on = t0 - epoch >= dev.onAtMs
@@ -202,7 +202,7 @@ export function createDemoGenerator(seed: number, epoch: number): DemoGenerator 
           if (rssi < BLE_SENSITIVITY_DBM || rng.next() > BLE_CATCH_RATE) continue
           const reading = clampRssi(rssi)
           heard.push(reading)
-          ble.push({ ts: Math.floor(t), node: DEMO_NODE, addr: dev.addr, rssi: reading, mfr: dev.mfr })
+          ble.push({ ts: Math.floor(t), addr: dev.addr, rssi: reading, mfr: dev.mfr })
         }
       }
       const recent = windows.get(dev) ?? []
@@ -210,7 +210,8 @@ export function createDemoGenerator(seed: number, epoch: number): DemoGenerator 
       windows.set(dev, recent.slice(-DETECT_EVERY_CYCLES))
     }
     ble.sort((a, b) => a.ts - b.ts)
-    for (const m of ble) {
+    // Like the unit: the window's readings go out together after the scan window.
+    for (const m of packBle(t1, DEMO_NODE, ble)) {
       out.messages.push({ topic: topic(DEMO_NODE, "ble"), payload: JSON.stringify(m), rxTs })
     }
 
