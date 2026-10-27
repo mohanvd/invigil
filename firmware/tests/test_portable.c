@@ -346,8 +346,11 @@ static void test_ble_batch_rejects_off_contract(void) {
     const ble_reading_t bad[] = {
         // Never a raw address, in any form.
         ble_reading(TS, "A9:1F:03:C2:D4:E8", -58, false, 0),
-        ble_reading(TS, "a91f03c2d4e8f", -58, false, 0),
+        // A reading holds at most 12 address chars, so a too-long one cannot
+        // reach the builder. Too short, uppercase and non-hex can.
+        ble_reading(TS, "a91f03c2d4e", -58, false, 0),
         ble_reading(TS, "A91F03C2D4E8", -58, false, 0),
+        ble_reading(TS, "a91f03c2d4eg", -58, false, 0),
         // RSSI outside -127..0.
         ble_reading(TS, "a91f03c2d4e8", 1, false, 0),
         ble_reading(TS, "a91f03c2d4e8", -128, false, 0),
