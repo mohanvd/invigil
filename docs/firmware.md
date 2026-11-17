@@ -20,19 +20,43 @@ The unit repeats one cycle, as the [MQTT contract](contract.md) requires:
 
 The cycle only runs while Wi-Fi is up, the clock is set by SNTP and MQTT is connected. Nothing is published before the clock is set, because the contract rejects unsynced timestamps. Reconnecting happens between cycles, never inside a scan window.
 
+## Finding the broker
+
+The unit does not need the laptop's IP address. On a phone hotspot the laptop gets a different address every time, so the unit finds the broker by itself (since version 0.3.0).
+
+**The beacon.** While the launcher runs (`invigil start`), it broadcasts one small UDP datagram a second to port **18830** on every network the laptop is on:
+
+```
+invigil broker 1883 52133b7ca99633f6
+```
+
+`1883` is the MQTT port. The last field is a signature: the first 16 hex characters of HMAC-SHA256, with the hash salt as the key and `invigil broker <mqtt port> <laptop IPv4>` as the message. The unit computes the same thing from the address the datagram came from. So a device that copies the beacon cannot point the unit at itself, and a laptop with another salt is ignored. `invigil/beacon.py` sends it, `firmware/portable/beacon.c` checks it, and CI compares the two.
+
+**What the unit does.**
+
+1. After Wi-Fi is up and the clock is set, it listens for a beacon and connects to the sender. The log says `mqtt: connecting to 10.139.204.170:1883 (beacon) as invigil-N1`.
+2. If no beacon arrives within 5 s, it tries `MQTT_HOST` from `secrets.h` if one is set, else the last address a beacon came from. If it has neither, it keeps listening and says so once.
+3. If the connection drops, it does the same again, with the usual backoff.
+4. While connected, a beacon from another address means the broker has moved (the laptop got a new address, or another laptop took over). The unit waits until the old address has missed 3 beacons, drops the old connection and connects to the new address. With two laptops broadcasting at once, it stays with the first one it heard.
+
+**Scan windows.** Listening is receive only: a broadcast is never acknowledged or answered, so a beacon that arrives during a scan window makes the unit transmit nothing. Every connect, reconnect and move happens between cycles, as before.
+
+**If the unit never finds the broker.** `mqtt: no broker beacon on UDP port 18830 yet` means no beacon reached the unit. Check that the launcher is running (its status screen has a `Beacon` line), that the laptop and the unit are on the same network, and that the network does not keep its devices apart (some hotspots and guest networks do, often called client or AP isolation). `ignored N beacons with a wrong signature` means `HASH_SALT` in `secrets.h` and `hash_salt` in `server/config.toml` differ.
+
 ## Modules
 
 | File | Job |
 | --- | --- |
 | `src/config.h` | Pins, timing constants (each marked as a guess to measure), the debug flag. Includes `secrets.h` |
 | `src/wifi_sta.c` | Wi-Fi station (WPA2 personal, country Egypt), reconnect with backoff (1 s doubling to 30 s), SNTP clock, prints the Wi-Fi channel and RSSI |
-| `src/mqtt_link.c` | lwIP MQTT, QoS 0, client ID `invigil-N1`, reconnect with backoff, waits when the output buffer is full |
+| `src/mqtt_link.c` | lwIP MQTT, QoS 0, client ID `invigil-N1`, chooses the broker (beacon, then the `MQTT_HOST` fallback), reconnect with backoff, waits when the output buffer is full |
+| `src/broker_find.c` | Listens for the launcher's beacon on UDP port 18830 and keeps the sender's address. Receive only |
 | `src/ble_scan.c` | BTstack observer, passive scan, duplicate filtering off, boot self-check with the hash test vector, buffer of 1024 readings |
 | `src/nrf_scan.c` | nRF24L01 on SPI0 at 4 MHz, receive only, RPD hits per channel per window, sweep timing |
 | `src/main.c` | The cycle, watchdog (8 s), LED, 10 s summary on USB serial |
 | `src/lwipopts.h`, `src/btstack_config.h` | lwIP and BTstack settings |
-| `portable/` | Code that needs no Pico SDK, tested on a PC: SHA-256 and address hashing, manufacturer ID parsing, JSON payloads, spectrum counting, the reading buffer, and the receive-only nRF24L01+ driver |
-| `tests/` | Host tests for `portable/`, and `check_contract.py`, which runs sample payloads through `server/contract.py` |
+| `portable/` | Code that needs no Pico SDK, tested on a PC: SHA-256 and address hashing, manufacturer ID parsing, JSON payloads, spectrum counting, the reading buffer, the beacon check, and the receive-only nRF24L01+ driver |
+| `tests/` | Host tests for `portable/`, and `check_contract.py`, which runs sample payloads through `server/contract.py` and compares the beacons with `invigil/beacon.py` |
 
 ### Privacy and receive-only rules in the code
 
@@ -70,10 +94,10 @@ Then fill it in:
 | Field | Value |
 | --- | --- |
 | `WIFI_SSID`, `WIFI_PASSWORD` | The hall Wi-Fi. WPA2 personal only |
-| `MQTT_HOST` | The laptop's IPv4 address (run `ipconfig` on the laptop). Not a host name |
-| `MQTT_PORT` | `1883` |
+| `MQTT_HOST` | Optional fallback, used only when no [beacon](#finding-the-broker) is heard. `""` for none, or the laptop's IPv4 address (not a host name) on a network where it is fixed |
+| `MQTT_PORT` | `1883`. The port for `MQTT_HOST`. With the beacon, the port comes from the beacon |
 | `MQTT_USER`, `MQTT_PASSWORD` | The same login as `server/config.toml` and `server/mosquitto.passwd` |
-| `HASH_SALT` | The same value as `hash_salt` in `server/config.toml`. The unit will not publish BLE readings while it is empty |
+| `HASH_SALT` | The same value as `hash_salt` in `server/config.toml`. The unit will not publish BLE readings while it is empty. The beacon is signed with it too |
 | `NODE_ID` | `"N1"` |
 | `SNTP_SERVER` | `"pool.ntp.org"`, or the laptop's IP address if the hall network has no internet. Then run an NTP server on the laptop |
 
@@ -172,7 +196,7 @@ Every 10 s the unit prints one line of `key=value` pairs. These are the numbers 
 | `send_overruns` | Send windows that needed more than 500 ms to drain. The unit waited longer instead of scanning |
 | `tx_in_scan` | Frames lwIP handed to the radio during scan windows. Should be 0 |
 | `sweeps_discarded` | Sweeps thrown away because lwIP sent a frame during them |
-| `wifi`, `mqtt` | Connection state |
+| `wifi`, `mqtt` | Connection state. `mqtt=finding-broker` means the unit is listening for the [beacon](#finding-the-broker) |
 
 `ble_no_rssi`, `ble_invalid` and `SELF-CHECK FAILED` only appear when they apply.
 
@@ -191,6 +215,8 @@ The contract says the unit must not scan the 2.4 GHz band while it transmits ove
 | SNTP | One request an hour, plus a DNS lookup, whenever the lwIP timer fires | Rarely |
 | Wi-Fi chip firmware | 802.11 acks for frames it receives, and power-save frames if power saving is on. lwIP does not see these. Power saving is off (`WIFI_PM_MODE` is `CYW43_NONE_PM`) because the default mode sends a power-save frame about 200 ms after the last packet, which would fall inside every scan window | 802.11 acks only, when something arrives |
 | Reconnecting | Wi-Fi and MQTT reconnects only start between cycles, and the cycle stops while either is down | No |
+| Broker beacon | The unit only listens. A broadcast is not acknowledged at the Wi-Fi level and lwIP sends no reply to it | No |
+| Broker moved | The old connection is dropped with one TCP reset between cycles, not a normal close, which would keep resending to an address that may be gone | No |
 | Bluetooth | Passive scan, so the Bluetooth side never transmits | No |
 | nRF24L01 | Receive only, auto-ack off | No |
 

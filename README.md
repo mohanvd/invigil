@@ -161,7 +161,7 @@ You can run the whole laptop side with fake data and no hardware. These commands
 
 ### One command for the real unit
 
-When the unit is on the network, the launcher runs the whole laptop side: Mosquitto with `server/mosquitto.conf`, the logger, and the dashboard on `http://127.0.0.1:8080`. It waits for the unit, opens the dashboard in Live mode and shows a status screen (broker, logger session, unit online, last status, message rates, laptop clock offset).
+When the unit is on the network, the launcher runs the whole laptop side: Mosquitto with `server/mosquitto.conf`, the broker beacon the unit uses to [find the laptop](docs/firmware.md#finding-the-broker), the logger, and the dashboard on `http://127.0.0.1:8080`. It waits for the unit, opens the dashboard in Live mode and shows a status screen (broker, logger session, unit online, last status, message rates, laptop clock offset).
 
 ```powershell
 python -m invigil start

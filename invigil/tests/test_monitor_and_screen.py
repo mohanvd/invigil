@@ -66,6 +66,7 @@ def test_status_screen_shows_every_line():
     clock = ntp.ClockCheck("pool.ntp.org", 1450.0)
     screen = render(records, mon, True, clock, "localhost", 1883, now=104)
     assert "Broker       running at localhost:1883 (not started by the launcher)" in screen
+    assert "Beacon       not running" in screen
     assert "Logger       not running" in screen
     assert "Unit N1      online" in screen
     assert "uptime 1h 02m, Wi-Fi RSSI -43 dBm, fw 0.1.0, 4 s ago" in screen

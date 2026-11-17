@@ -23,6 +23,8 @@
 #define MEMP_NUM_TCP_SEG 32
 #define MEMP_NUM_ARP_QUEUE 10
 #define PBUF_POOL_SIZE 24
+// UDP sockets: DHCP, DNS, SNTP and the broker beacon listener, plus spare.
+#define MEMP_NUM_UDP_PCB 6
 
 #define LWIP_IPV4 1
 #define LWIP_IPV6 0

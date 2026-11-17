@@ -10,6 +10,8 @@
 //   3. Quiet gap, then the next scan window.
 // The cycle only runs while Wi-Fi is up, the clock is set and MQTT is
 // connected. Reconnecting happens between cycles, never inside a scan window.
+// The broker's address comes from the launcher's UDP beacon (broker_find),
+// which the unit only listens for.
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -20,7 +22,9 @@
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 
+#include "beacon.h"
 #include "ble_scan.h"
+#include "broker_find.h"
 #include "config.h"
 #include "mqtt_link.h"
 #include "nrf_scan.h"
@@ -361,6 +365,9 @@ int main(void) {
     printf("  %s  node ID \"%s\"\n", node_ok ? "PASS" : "FAIL", NODE_ID);
     hash_ok = ble_scan_init();
     nrf_ok = nrf_scan_init();
+    // Without the listener the unit still works through MQTT_HOST, so this
+    // check does not set the fault LED.
+    printf("  %s  broker beacon listener (UDP port %d)\n", broker_find_init() ? "PASS" : "FAIL", BEACON_UDP_PORT);
     printf("timing: scan %d ms, send up to %d ms, quiet gap %d ms, status every %d ms\n", SCAN_WINDOW_MS,
            SEND_WINDOW_MAX_MS, QUIET_GAP_MS, STATUS_PERIOD_MS);
 
