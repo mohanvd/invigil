@@ -39,7 +39,7 @@ endif()
 
 include(pico_sdk_import.cmake)
 
-project(invigil_fw VERSION 0.2.0 LANGUAGES C CXX ASM)
+project(invigil_fw VERSION 0.3.0 LANGUAGES C CXX ASM)
 
 pico_sdk_init()
 
@@ -50,11 +50,13 @@ endif()
 set(INVIGIL_SOURCES
     src/main.c
     src/ble_scan.c
+    src/broker_find.c
     src/mqtt_link.c
     src/nrf_scan.c
     src/wifi_sta.c
     portable/addr_hash.c
     portable/adv_data.c
+    portable/beacon.c
     portable/ble_ring.c
     portable/nrf24.c
     portable/payload.c

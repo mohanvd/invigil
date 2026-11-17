@@ -80,7 +80,7 @@ The unit connects to the laptop over Wi-Fi, so the broker must listen on the net
 
    The config opens two listeners: plain MQTT on port 1883 for the unit and the Python tools, and WebSockets on port 9001 for the [dashboard](../README.md#dashboard), because a browser cannot open a plain MQTT socket. The same login applies to both.
 
-3. Put the same username and password in `server/config.toml` and in the firmware secrets. Point the unit at the laptop's IP address (find it with `ipconfig`, or `ip addr` on Linux).
+3. Put the same username and password in `server/config.toml` and in the firmware secrets. The unit finds the laptop by itself through the launcher's beacon (see [Finding the broker](firmware.md#finding-the-broker)), so its IP address is not needed. Without the launcher, set `MQTT_HOST` in the firmware secrets to the laptop's IP address (find it with `ipconfig`, or `ip addr` on Linux).
 4. If Windows Firewall asks, allow Mosquitto on private networks.
 5. Start the logger as above.
 
@@ -94,7 +94,7 @@ python -m invigil start
 
 | Command | What it does |
 | --- | --- |
-| `start` | Starts Mosquitto with `server/mosquitto.conf`, the logger (session `live-<time>`, or `--session NAME`) and the dashboard on `http://127.0.0.1:8080`. Waits for the unit's first status message, opens the dashboard in Live mode, then shows the status screen |
+| `start` | Starts Mosquitto with `server/mosquitto.conf`, the broker beacon (one UDP broadcast a second on port 18830, so the unit finds the laptop), the logger (session `live-<time>`, or `--session NAME`) and the dashboard on `http://127.0.0.1:8080`. Waits for the unit's first status message, opens the dashboard in Live mode, then shows the status screen |
 | `stop` | Stops only the processes `start` started |
 | `status` | Listens for 12 s, then prints the status screen once. Starts nothing |
 | `calibrate` | Guided calibration run, see below |
@@ -104,7 +104,7 @@ python -m invigil start
 
 What `start` checks first:
 
-- `server/config.toml` has the MQTT login and `server/mosquitto.passwd` exists.
+- `server/config.toml` has the MQTT login and the hash salt (the beacon is signed with it), and `server/mosquitto.passwd` exists.
 - Ports 1883 and 9001 are free. If the Windows Mosquitto service holds them, it says so and prints the administrator command (`net stop mosquitto`). It never stops the service itself.
 - The laptop clock against `pool.ntp.org` (change it with `--ntp-server`). More than 100 ms off prints a warning, because latency (`rx_ts - ts`) compares the laptop clock with the unit's.
 - The dashboard build. The first time, it asks before running `pnpm install` (needs Node.js 24 and internet). After that it rebuilds only when a dashboard file changed.
@@ -115,6 +115,7 @@ The status screen refreshes every 2 s:
 
 ```
 Broker       running at localhost:1883 (started by the launcher, PID 4120)
+Beacon       broadcasting on UDP port 18830 (PID 4152)
 Logger       data/raw/2026-10-26-live-193000 (PID 4188)
 Dashboard    http://127.0.0.1:8080/?source=live&... (PID 4236)
 Unit N1      online
@@ -152,7 +153,7 @@ Each session folder holds three CSV files, one per message type:
 | `status.csv` | `rx_ts, ts, node, uptime_s, wifi_rssi, fw` |
 
 - `ts` is when the unit took the reading. `rx_ts` is when the laptop received it. Both are milliseconds since epoch, so `rx_ts - ts` is the unit-to-laptop latency (design requirement 4). The two clocks are only as close as SNTP keeps them, so check the clock offset before you report a latency result. A negative latency means the unit clock is ahead.
-- Fake runs show `fw` as `0.2.0-fake` in `status.csv`.
+- Fake runs show `fw` as `0.3.0-fake` in `status.csv`.
 - A session started by `invigil start` also gets `clock.json`: the laptop clock against NTP when the recording started, and again when `invigil stop` ended it. `laptop_minus_ntp_ms` is how far `rx_ts` ran ahead of real time, so subtract it from `rx_ts - ts` before you report a latency. `null` means the NTP server could not be reached.
 - Files are flushed after every row, so a crash or Ctrl+C loses nothing.
 

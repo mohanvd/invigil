@@ -2,8 +2,9 @@
 //
 // Usage: test_portable [samples.tsv]
 // With a path, it also writes sample topics and payloads for every message
-// kind, plus address hash vectors. CI checks that file with
-// firmware/tests/check_contract.py, which uses server/contract.py.
+// kind, plus address hash vectors and broker beacons. CI checks that file
+// with firmware/tests/check_contract.py, which uses server/contract.py and
+// invigil/beacon.py.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 
 #include "addr_hash.h"
 #include "adv_data.h"
+#include "beacon.h"
 #include "ble_ring.h"
 #include "nrf24.h"
 #include "payload.h"
@@ -115,6 +117,162 @@ static void test_addr_hash_validity(void) {
     CHECK(!addr_hash_is_valid("41239c0be85e0", 13));      // long
     CHECK(!addr_hash_is_valid("A9:1F:03:C2:D4:E8", 17));  // raw address
     CHECK(!addr_hash_is_valid("zz239c0be85e", 12));
+}
+
+// --------------------------------------------------------- broker beacon
+
+static void hmac_hex(const void *key, size_t key_len, const char *msg, char out[65]) {
+    uint8_t mac[SHA256_DIGEST_LEN];
+    hmac_sha256(key, key_len, msg, strlen(msg), mac);
+    to_hex(mac, sizeof(mac), out);
+}
+
+// RFC 4231 test cases 1, 2 and 6.
+static void test_hmac_sha256_standard_vectors(void) {
+    char hex[65];
+    uint8_t key[131];
+
+    memset(key, 0x0b, 20);
+    hmac_hex(key, 20, "Hi There", hex);
+    CHECK_STR(hex, "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7");
+
+    hmac_hex("Jefe", 4, "what do ya want for nothing?", hex);
+    CHECK_STR(hex, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+
+    memset(key, 0xaa, sizeof(key));  // longer than one block: hashed first
+    hmac_hex(key, sizeof(key), "Test Using Larger Than Block-Size Key - Hash Key First", hex);
+    CHECK_STR(hex, "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54");
+}
+
+static const char BEACON_KEY[] = "invigil-test-vector";
+static const uint8_t BEACON_IP[4] = {192, 168, 43, 17};
+// The same vector as invigil/tests/test_beacon.py.
+static const char BEACON_VECTOR[] = "invigil broker 1883 52133b7ca99633f6";
+
+static bool verify_str(const char *key, const char *data, const uint8_t ip[4], uint16_t *port) {
+    return beacon_verify(key, (const uint8_t *)data, strlen(data), ip, port);
+}
+
+static void test_beacon_tag_vector(void) {
+    char tag[BEACON_TAG_LEN + 1];
+    beacon_tag(BEACON_KEY, 1883, BEACON_IP, tag);
+    CHECK_STR(tag, "52133b7ca99633f6");
+
+    const uint8_t all_ones[4] = {255, 255, 255, 255};
+    beacon_tag(BEACON_KEY, 65535, all_ones, tag);  // the longest message
+    CHECK_STR(tag, "3b5aa0b83ba7cc86");
+}
+
+static void test_beacon_verify_accepts_the_real_one(void) {
+    uint16_t port = 0;
+    CHECK(verify_str(BEACON_KEY, BEACON_VECTOR, BEACON_IP, &port));
+    CHECK(port == 1883);
+
+    port = 0;
+    CHECK(verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f6\n", BEACON_IP, &port));
+    CHECK(port == 1883);
+    CHECK(verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f6\r\n", BEACON_IP, &port));
+
+    const uint8_t all_ones[4] = {255, 255, 255, 255};
+    CHECK(verify_str(BEACON_KEY, "invigil broker 65535 3b5aa0b83ba7cc86", all_ones, &port));
+    CHECK(port == 65535);
+    CHECK(strlen("invigil broker 65535 3b5aa0b83ba7cc86\r\n") <= BEACON_MAX_LEN);
+}
+
+static void test_beacon_verify_rejects_everything_else(void) {
+    uint16_t port = 7;
+    const uint8_t other_ip[4] = {192, 168, 43, 18};
+
+    // Copied by another device: right bytes, wrong sender.
+    CHECK(!verify_str(BEACON_KEY, BEACON_VECTOR, other_ip, &port));
+    // Another salt, and no salt at all.
+    CHECK(!verify_str("another-salt", BEACON_VECTOR, BEACON_IP, &port));
+    CHECK(!verify_str("", BEACON_VECTOR, BEACON_IP, &port));
+    char empty_tag[BEACON_TAG_LEN + 1];
+    char signed_with_nothing[BEACON_MAX_LEN + 1];
+    beacon_tag("", 1883, BEACON_IP, empty_tag);
+    snprintf(signed_with_nothing, sizeof(signed_with_nothing), "invigil broker 1883 %s", empty_tag);
+    CHECK(!verify_str("", signed_with_nothing, BEACON_IP, &port));
+
+    // The port is signed too.
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1884 52133b7ca99633f6", BEACON_IP, &port));
+    // Malformed.
+    CHECK(!verify_str(BEACON_KEY, "", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker ", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 ", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f", BEACON_IP, &port));    // short tag
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f6a", BEACON_IP, &port));  // long tag
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 52133B7CA99633F6", BEACON_IP, &port));   // uppercase
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883  52133b7ca99633f6", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "Invigil broker 1883 52133b7ca99633f6", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f6\n\n", BEACON_IP, &port));
+    CHECK(!verify_str(BEACON_KEY, "invigil broker 1883 52133b7ca99633f6 trailing", BEACON_IP, &port));
+    CHECK(port == 7);  // untouched by every rejection
+
+    // Ports that are not 1 to 65535, each with a tag that would otherwise match.
+    static const char *const bad_ports[] = {"0", "01883", "65536", "99999", "123456", "-1", "18 83", "0x75B"};
+    for (size_t i = 0; i < sizeof(bad_ports) / sizeof(bad_ports[0]); i++) {
+        char data[64];
+        snprintf(data, sizeof(data), "invigil broker %s 52133b7ca99633f6", bad_ports[i]);
+        CHECK(!verify_str(BEACON_KEY, data, BEACON_IP, &port));
+    }
+
+    // Longer than a beacon can be, and bytes that are not text.
+    uint8_t big[BEACON_MAX_LEN + 1];
+    memset(big, 'a', sizeof(big));
+    CHECK(!beacon_verify(BEACON_KEY, big, sizeof(big), BEACON_IP, &port));
+    memset(big, 0xff, sizeof(big));
+    CHECK(!beacon_verify(BEACON_KEY, big, BEACON_MAX_LEN, BEACON_IP, &port));
+    CHECK(!beacon_verify(BEACON_KEY, big, 0, BEACON_IP, &port));
+}
+
+static void test_beacon_pick_follows_one_sender(void) {
+    const beacon_addr_t a = {{192, 168, 43, 17}, 1883};
+    const beacon_addr_t b = {{192, 168, 43, 99}, 1883};
+    const beacon_addr_t a_other_port = {{192, 168, 43, 17}, 1884};
+    beacon_addr_t got;
+    beacon_pick_t p;
+
+    beacon_pick_init(&p);
+    CHECK(!beacon_pick_live(&p, 0, &got));
+    CHECK(!beacon_pick_last(&p, &got));
+
+    beacon_pick_heard(&p, &a, 1000);
+    CHECK(beacon_pick_live(&p, 1000, &got) && beacon_addr_equal(&got, &a));
+
+    // A second laptop on the network does not take over while the first sends.
+    for (uint32_t t = 1500; t < 20000; t += 1000) {
+        beacon_pick_heard(&p, &b, t);
+        beacon_pick_heard(&p, &a, t + 500);
+        CHECK(beacon_pick_live(&p, t + 500, &got) && beacon_addr_equal(&got, &a));
+    }
+
+    // The first one stops (last heard at 20000). It stays for 3 missed beacons.
+    beacon_pick_heard(&p, &b, 20000 + BEACON_LOST_MS - 1);
+    CHECK(beacon_pick_live(&p, 20000 + BEACON_LOST_MS - 1, &got) && beacon_addr_equal(&got, &a));
+    CHECK(!beacon_pick_live(&p, 20000 + BEACON_LOST_MS, &got));
+    CHECK(beacon_pick_last(&p, &got) && beacon_addr_equal(&got, &a));  // still remembered
+    // Then the other one is followed: the broker has moved.
+    beacon_pick_heard(&p, &b, 20000 + BEACON_LOST_MS);
+    CHECK(beacon_pick_live(&p, 20000 + BEACON_LOST_MS, &got) && beacon_addr_equal(&got, &b));
+    CHECK(beacon_pick_last(&p, &got) && beacon_addr_equal(&got, &b));
+
+    // The same laptop on another port is another broker.
+    CHECK(!beacon_addr_equal(&a, &a_other_port));
+}
+
+static void test_beacon_pick_survives_the_clock_wrapping(void) {
+    const beacon_addr_t a = {{10, 0, 0, 1}, 1883};
+    beacon_addr_t got;
+    beacon_pick_t p;
+    beacon_pick_init(&p);
+
+    // to_ms_since_boot() wraps after 49.7 days.
+    beacon_pick_heard(&p, &a, 0xFFFFFF00u);
+    CHECK(beacon_pick_live(&p, 0xFFFFFFFFu, &got));
+    CHECK(beacon_pick_live(&p, 0x00000100u, &got));  // 512 ms later, past the wrap
+    CHECK(!beacon_pick_live(&p, 0xFFFFFF00u + BEACON_LOST_MS, &got));
 }
 
 // ------------------------------------------------------ manufacturer ID
@@ -716,6 +874,16 @@ static void write_hash(FILE *f, const char *salt, const uint8_t addr[ADDR_LEN]) 
     fprintf(f, "hash\t%s\t%s\t%s\n", salt_hex, addr_hex, hash);
 }
 
+static void write_beacon(FILE *f, const char *salt, uint16_t port, const uint8_t ip[4]) {
+    char tag[BEACON_TAG_LEN + 1];
+    char salt_hex[2 * 128 + 1];
+    CHECK(strlen(salt) <= 128);
+    beacon_tag(salt, port, ip, tag);
+    to_hex((const uint8_t *)salt, strlen(salt), salt_hex);
+    fprintf(f, "beacon\t%s\t%u\t%u.%u.%u.%u\tinvigil broker %u %s\n", salt_hex, (unsigned)port, (unsigned)ip[0],
+            (unsigned)ip[1], (unsigned)ip[2], (unsigned)ip[3], (unsigned)port, tag);
+}
+
 static int write_samples(const char *path) {
     FILE *f = fopen(path, "w");
     if (!f) {
@@ -804,6 +972,20 @@ static int write_samples(const char *path) {
         }
     }
 
+    // Beacons for check_contract.py to compare with invigil/beacon.py, with
+    // the same salts: a65 would be longer than one HMAC block.
+    static const uint8_t ips[][4] = {{192, 168, 43, 17}, {10, 0, 0, 1}, {172, 20, 10, 2}, {255, 255, 255, 255}};
+    static const uint16_t ports[] = {1883, 1, 65535};
+    char a65[66];
+    memset(a65, 'a', 65);
+    a65[65] = '\0';
+    const char *beacon_salts[] = {"invigil-test-vector", a64, a65, "\xd8\xb3\xd8\xb1-salt"};
+    for (size_t s_i = 0; s_i < sizeof(beacon_salts) / sizeof(beacon_salts[0]); s_i++) {
+        for (size_t i = 0; i < sizeof(ips) / sizeof(ips[0]); i++) {
+            write_beacon(f, beacon_salts[s_i], ports[i % 3], ips[i]);
+        }
+    }
+
     fclose(f);
     return 0;
 }
@@ -812,6 +994,12 @@ int main(int argc, char **argv) {
     test_sha256_standard_vectors();
     test_addr_hash_vector_both_orders();
     test_addr_hash_validity();
+    test_hmac_sha256_standard_vectors();
+    test_beacon_tag_vector();
+    test_beacon_verify_accepts_the_real_one();
+    test_beacon_verify_rejects_everything_else();
+    test_beacon_pick_follows_one_sender();
+    test_beacon_pick_survives_the_clock_wrapping();
     test_company_id_found();
     test_company_id_absent();
     test_company_id_malformed();

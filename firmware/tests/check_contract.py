@@ -1,10 +1,12 @@
 """Check the firmware's sample messages against the MQTT contract.
 
 The host test program (firmware/tests/test_portable.c) writes a sample of
-every message kind the unit builds, plus address hash vectors. This script
-runs the messages through server/contract.py, the same checks the logger
-uses, and compares the firmware's hashes with contract.hash_addr(). So the
-firmware payloads and the contract cannot drift apart.
+every message kind the unit builds, plus address hash vectors and broker
+beacons. This script runs the messages through server/contract.py, the same
+checks the logger uses, compares the firmware's hashes with
+contract.hash_addr(), and compares the beacons the firmware expects with the
+ones invigil/beacon.py sends. So the firmware and the laptop side cannot
+drift apart.
 
 Run from the repo root after the host tests:
     python firmware/tests/check_contract.py firmware/build/tests/samples.tsv
@@ -19,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from invigil import beacon  # noqa: E402
 from server import contract  # noqa: E402
 
 
@@ -33,6 +36,7 @@ def check(path: Path) -> list[str]:
     errors = []
     kinds: Counter[str] = Counter()
     hashes = 0
+    beacons = 0
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line:
             continue
@@ -53,6 +57,13 @@ def check(path: Path) -> list[str]:
                 if firmware_hash != expected:
                     raise ValueError(f"firmware hash {firmware_hash} != contract hash {expected}")
                 hashes += 1
+            elif fields[0] == "beacon" and len(fields) == 5:
+                _, salt_hex, port, ip, firmware_beacon = fields
+                salt = bytes.fromhex(salt_hex).decode("utf-8")
+                expected = beacon.payload(salt, int(port), ip).decode()
+                if firmware_beacon != expected:
+                    raise ValueError(f"firmware beacon {firmware_beacon!r} != launcher beacon {expected!r}")
+                beacons += 1
             else:
                 raise ValueError("unknown line format")
         except (contract.ContractError, ValueError) as e:
@@ -63,9 +74,11 @@ def check(path: Path) -> list[str]:
             errors.append(f"no {kind} sample in {path}")
     if hashes == 0:
         errors.append(f"no hash vectors in {path}")
+    if beacons == 0:
+        errors.append(f"no beacons in {path}")
     if not errors:
         counts = ", ".join(f"{kinds[k]} {k}" for k in contract.KINDS)
-        print(f"contract check passed: {counts}, {hashes} hash vectors")
+        print(f"contract check passed: {counts}, {hashes} hash vectors, {beacons} beacons")
     return errors
 
 

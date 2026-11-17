@@ -20,6 +20,7 @@ add_executable(test_portable
     test_portable.c
     ${PORTABLE_DIR}/addr_hash.c
     ${PORTABLE_DIR}/adv_data.c
+    ${PORTABLE_DIR}/beacon.c
     ${PORTABLE_DIR}/ble_ring.c
     ${PORTABLE_DIR}/nrf24.c
     ${PORTABLE_DIR}/payload.c

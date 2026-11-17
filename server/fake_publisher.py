@@ -33,7 +33,7 @@ from server.config import load_config
 
 log = logging.getLogger("invigil.fake")
 
-FAKE_FW = "0.2.0-fake"  # shows up in status.csv, so fake runs are easy to spot
+FAKE_FW = "0.3.0-fake"  # shows up in status.csv, so fake runs are easy to spot
 
 # Distance bands from docs/data-protocol.md: (name, upper edge in metres).
 BANDS = (("near", 1.0), ("mid", 2.0), ("far", 3.5))

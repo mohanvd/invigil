@@ -59,6 +59,8 @@ The topic keeps the `{node_id}` level so more units can be added in Phase 2 with
 
 The unit publishes over plain MQTT on port 1883. The dashboard runs in a browser, which cannot open a plain MQTT socket, so it subscribes to `invigil/node/+/+` over WebSockets on port 9001 (see `server/mosquitto.conf`). Topics and payloads are the same on both.
 
+The unit learns the broker's address from a UDP beacon the launcher broadcasts on port 18830. It is not an MQTT message and carries no readings. See [Finding the broker](firmware.md#finding-the-broker).
+
 ## Proposed
 
 Not implemented. Nothing publishes this topic yet, `server/contract.py` rejects it, and the dashboard only shows detections from its Demo source. Agree on it here before building the Python side.

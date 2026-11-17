@@ -80,6 +80,18 @@
 #define WIFI_PM_MODE CYW43_NONE_PM
 // Give up on one connection attempt after this long and back off.
 #define WIFI_CONNECT_TIMEOUT_MS 20000
+// The broker is found by the launcher's beacon (portable/beacon.h). MQTT_HOST
+// and MQTT_PORT in secrets.h are an optional fallback: leave MQTT_HOST empty,
+// or leave both out, to use the beacon only.
+#ifndef MQTT_HOST
+#define MQTT_HOST ""
+#endif
+#ifndef MQTT_PORT
+#define MQTT_PORT 1883
+#endif
+// Listen this long for a beacon (sent once a second) before trying the
+// fallback. Starting guess, to be measured.
+#define BROKER_BEACON_WAIT_MS 5000
 // Give up on one MQTT connection attempt after this long and back off.
 #define MQTT_CONNECT_TIMEOUT_MS 10000
 // Reconnect backoff for Wi-Fi and MQTT: 1 s, doubling up to 30 s.
