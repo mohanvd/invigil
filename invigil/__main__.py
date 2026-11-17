@@ -11,7 +11,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from invigil import ROOT, broker, calibrate, dashboard, monitor, ntp, procs
+from invigil import ROOT, beacon, broker, calibrate, dashboard, monitor, ntp, procs
 from server import contract
 from server.config import load_config
 from server.logger import session_dir
@@ -58,6 +58,12 @@ def render(
         lines.append(f"Broker       running at {host}:{port} ({who})")
     else:
         lines.append(f"Broker       NOT reachable at {host}:{port} {mon.connect_error}".rstrip())
+    bc = describe_process(records, "beacon")
+    lines.append(
+        f"Beacon       broadcasting on UDP port {beacon.UDP_PORT} (PID {bc['pid']})"
+        if bc
+        else "Beacon       not running: the unit cannot find the broker by itself"
+    )
     lg = describe_process(records, "logger")
     lines.append(f"Logger       {lg['out']} (PID {lg['pid']})" if lg else "Logger       not running")
     web = describe_process(records, "dashboard")
@@ -90,6 +96,11 @@ def preflight(cfg) -> list[str]:
         problems.append("server/config.toml is missing. Copy server/config.toml.example and fill it in.")
     elif not cfg.username:
         problems.append("server/config.toml has no MQTT username. The broker requires a login.")
+    if cfg.loaded_from is not None and not cfg.hash_salt:
+        problems.append(
+            "server/config.toml has no hash_salt. The broker beacon is signed with it,\n"
+            "and it must be the same as HASH_SALT in firmware/secrets.h."
+        )
     if not broker.PASSWD.exists():
         problems.append(
             "server/mosquitto.passwd is missing. Create it (it asks for the password):\n"
@@ -149,6 +160,10 @@ def cmd_start(args) -> int:
             print("Mosquitto did not start. Its log:\n" + procs.tail(mq["log"]))
             stop_all(records)
             return 1
+
+        # The unit finds the broker through this (docs/firmware.md, Finding the broker).
+        records.append(procs.spawn("beacon", [sys.executable, "-m", "invigil.beacon"]))
+        procs.save_run(records)
 
         name = args.session or f"live-{datetime.now():%H%M%S}"
         out = session_dir(Path("data/raw"), name)
@@ -297,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ntp-server", default=ntp.DEFAULT_SERVER, help="server for the clock check")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("start", help="start the broker, the logger and the dashboard")
+    p = sub.add_parser("start", help="start the broker, its beacon, the logger and the dashboard")
     p.add_argument("--session", help="logger session name (default: live-<time>)")
     p.add_argument("--port", type=int, default=dashboard.PORT, help="dashboard port (default: 8080)")
     p.set_defaults(func=cmd_start)
