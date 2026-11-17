@@ -2,7 +2,7 @@
 
 The firmware for sensor unit N1: a Raspberry Pi Pico 2 W (RP2350 + CYW43439) with an nRF24L01+PA+LNA on SPI0.
 
-**Status: version 0.2.0 runs on the real unit N1.** On the first hardware run (2026-10-26, version 0.1.0) every self-check passed, the unit published BLE, spectrum and status messages, and the logger rejected none of them ([first boot report](results/2026-10-26-first-boot/report.md)). The BTstack byte order is checked and correct ([byte-order report](results/2026-10-26-byte-order/report.md)). The timing values are still starting guesses, and the [To measure](#to-measure) section lists what is left to check on the board.
+**Status: version 0.3.0 runs on the real unit N1.** It found the broker by beacon on a phone hotspot on 2026-11-17 ([report](results/2026-11-17-broker-beacon/report.md)); the nRF24L01 did not answer on that run, so the spectrum path was last checked on 0.2.0. On the first hardware run (2026-10-26, version 0.1.0) every self-check passed, the unit published BLE, spectrum and status messages, and the logger rejected none of them ([first boot report](results/2026-10-26-first-boot/report.md)). The BTstack byte order is checked and correct ([byte-order report](results/2026-10-26-byte-order/report.md)). The timing values are still starting guesses, and the [To measure](#to-measure) section lists what is left to check on the board.
 
 - Toolchain: the official Pico SDK **2.3.1** in C with CMake, Arm GNU Toolchain **15.2.Rel1**, picotool **2.3.1**, built with the Raspberry Pi Pico VS Code extension. No Arduino, no Arduino-Pico core, no PlatformIO, no ESP code.
 - Board: `pico2_w`.
