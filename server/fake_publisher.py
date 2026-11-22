@@ -216,7 +216,7 @@ def run(send: Callable[[str, dict], None], devices: list[Device], scan_ms: int, 
                 n.scan_start = now  # fell behind (laptop was asleep), skip ahead
 
         if now >= next_report:
-            log.info("sent %s in the last 10 s", ", ".join(f"{sent[k]} {k}" for k in contract.KINDS))
+            log.info("sent %s in the last 10 s", ", ".join(f"{sent[k]} {k}" for k in contract.UNIT_KINDS))
             sent.clear()
             next_report += 10_000
 
