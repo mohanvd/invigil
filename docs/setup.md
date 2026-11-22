@@ -45,7 +45,7 @@ You need a broker on `localhost:1883`. On Windows, the Mosquitto installer adds 
    python -m server.fake_publisher
    ```
 
-The fake publisher prints the ground truth for the run: each fake device's hashed address, its type, its distance band, and its distance from the unit. Every 10 seconds the logger prints how many messages it got from the unit, the latency, and how many messages it rejected. Press Ctrl+C in each terminal to stop.
+The fake publisher prints the ground truth for the run: each fake device's hashed address, its type, near or not near, and its distance from the unit. Every 10 seconds the logger prints how many messages it got from the unit, the latency, and how many messages it rejected. Press Ctrl+C in each terminal to stop.
 
 Useful options (add `--help` to either command to see all of them):
 
@@ -94,7 +94,7 @@ python -m invigil start
 
 | Command | What it does |
 | --- | --- |
-| `start` | Starts Mosquitto with `server/mosquitto.conf`, the broker beacon (one UDP broadcast a second on port 18830, so the unit finds the laptop), the logger (session `live-<time>`, or `--session NAME`) and the dashboard on `http://127.0.0.1:8080`. Waits for the unit's first status message, opens the dashboard in Live mode, then shows the status screen |
+| `start` | Starts Mosquitto with `server/mosquitto.conf`, the broker beacon (one UDP broadcast a second on port 18830, so the unit finds the laptop), the logger (session `live-<time>`, or `--session NAME`), the detector (if `ml/models/` has trained models) and the dashboard on `http://127.0.0.1:8080`. Waits for the unit's first status message, opens the dashboard in Live mode, then shows the status screen |
 | `stop` | Stops only the processes `start` started |
 | `status` | Listens for 12 s, then prints the status screen once. Starts nothing |
 | `calibrate` | Guided calibration run, see below |
@@ -117,10 +117,11 @@ The status screen refreshes every 2 s:
 Broker       running at localhost:1883 (started by the launcher, PID 4120)
 Beacon       broadcasting on UDP port 18830 (PID 4152)
 Logger       data/raw/2026-10-26-live-193000 (PID 4188)
+Detector     running (PID 4210)
 Dashboard    http://127.0.0.1:8080/?source=live&... (PID 4236)
 Unit N1      online
 Last status  uptime 22m 11s, Wi-Fi RSSI -46 dBm, fw 0.1.0, 1 s ago
-Readings     ble 35.2/s, spectrum 0.9/s, status 0.1/s, rejected messages 0
+Readings     ble 35.2/s, spectrum 0.9/s, status 0.1/s, detection 2.0/s, rejected messages 0
 Laptop clock 12 ms behind pool.ntp.org
 ```
 
@@ -136,11 +137,40 @@ python -m invigil calibrate
 
 It asks for the device type, a name such as "earpiece A" (never a person's name), the state and the position. Then it steps through 0.5, 1, 1.5, 2, 2.5, 3 and 3.5 m. At each distance, place the device, press Enter, and do not touch anything for 60 s (`--seconds` changes it). Each step is its own session, `data/raw/<date>-calib-<type>-<name>-<distance>m/`, recorded with the logger's contract check. The broker must be running (`invigil start`).
 
-After the first step it shows the strongest addresses and asks you to confirm which one is the test device, then follows that hash through the later steps. If the device changes its address, it asks for the new one. Each step gets a `session.json` written the same way `ml/label.py` writes it, already filled in: the type, the band (0.5 m near; 1, 1.5 and 2 m mid; 2.5, 3 and 3.5 m far), the name as `model`, the state, the position, `distance_m`, and `"kind": "calibration"` at the top.
+After the first step it shows the strongest addresses and asks you to confirm which one is the test device, then follows that hash through the later steps. If the device changes its address, it asks for the new one. Each step gets a `session.json` written the same way `ml/label.py` writes it, already filled in: the type, the band (0.5 m near; 1 m and farther not_near), the name as `model`, the state, the position, `distance_m`, and `"kind": "calibration"` at the top.
 
 To stop, type `q` when it asks you to place the device, or press Ctrl+C at any time. Progress is saved after every step in `.invigil/calibration-<type>-<name>.json`, so running calibrate again with the same type and name continues where it stopped. A step that was cut off halfway is moved aside to a folder ending in `-incomplete-<time>`, never mixed into the new recording. At the end it prints the readings and the median RSSI at each distance.
 
 Calibration sessions have a filled-in `session.json`, so `ml.train` uses them like any other labelled session.
+
+### The detector
+
+`server/detector.py` turns live readings into alerts. Each time a batch of BLE readings arrives (about once a second), it takes the last 5 s of each unit's readings, the same windows the models were trained on, and publishes one `detection` message per device ([MQTT contract](contract.md#detections)): device type, and near (under 1 m) or not near. `invigil start` runs it. To run it by hand:
+
+```powershell
+python -m server.detector
+```
+
+It needs the two models in `ml/models/` (gitignored). Make them from the labelled sessions with `python -m ml.train`. Without them, `start` skips the detector and the status screen says why.
+
+Two settings in `server/config.toml`:
+
+```toml
+[whitelist]
+# Hashes of devices allowed in the hall, such as the invigilator's phone.
+allowed = ["a91f03c2d4e8"]
+
+[detector]
+# Devices weaker than this median RSSI over 5 s are ignored.
+min_rssi = -85
+```
+
+A whitelisted device is reported with type `allowed` and never raises an alert. Only hashes go in the whitelist, never raw addresses: the config refuses anything that is not 12 lowercase hex characters. Find a device's hash with `python -m ml.label data/raw/<session>`, or in the dashboard's alert list.
+
+The two modes:
+
+- **Watch mode.** The unit sits on the invigilator's desk. The dashboard lists every banned device it hears in the hall, with its type.
+- **Search mode.** The invigilator carries the unit along the rows. When a banned device is within 1 m, the Live page shows a large `NEAR: <type>` banner. The closest seat is the one to check.
 
 ## What the logger writes
 

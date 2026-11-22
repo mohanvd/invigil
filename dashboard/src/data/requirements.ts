@@ -16,7 +16,7 @@ export interface Requirement {
 export const REQUIREMENTS: readonly Requirement[] = [
   { id: 1, title: "Response time", target: "at most 5 s", limit: 5, kind: "max", unit: "s", decimals: 1 },
   { id: 2, title: "Device type accuracy", target: "at least 85%", limit: 85, kind: "min", unit: "%", decimals: 1 },
-  { id: 3, title: "Distance band accuracy", target: "at least 80%", limit: 80, kind: "min", unit: "%", decimals: 1 },
+  { id: 3, title: "Near / not-near accuracy", target: "at least 80%", limit: 80, kind: "min", unit: "%", decimals: 1 },
   { id: 4, title: "Alert latency", target: "within 2 s", limit: 2, kind: "max", unit: "s", decimals: 2 },
   { id: 5, title: "False alarms", target: "at most 1 per hour", limit: 1, kind: "max", unit: "per hour", decimals: 1 },
   { id: 6, title: "Detection range", target: "at least 3 m", limit: 3, kind: "min", unit: "m", decimals: 1 },

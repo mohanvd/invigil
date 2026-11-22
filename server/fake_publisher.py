@@ -35,8 +35,8 @@ log = logging.getLogger("invigil.fake")
 
 FAKE_FW = "0.3.0-fake"  # shows up in status.csv, so fake runs are easy to spot
 
-# Distance bands from docs/data-protocol.md: (name, upper edge in metres).
-BANDS = (("near", 1.0), ("mid", 2.0), ("far", 3.5))
+# Bands from docs/data-protocol.md: (name, upper edge in metres).
+BANDS = (("near", 1.0), ("not_near", 3.5))
 
 # ---------------------------------------------------------------------------
 # PLACEHOLDERS. None of these are measured yet.
@@ -81,7 +81,7 @@ class Device:
 
 
 def band_of(distance_m: float) -> str:
-    """Distance band for a distance from the unit. An edge belongs to the farther band."""
+    """near or not_near for a distance from the unit. An edge belongs to the farther band."""
     for name, upper in BANDS:
         if distance_m < upper:
             return name

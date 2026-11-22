@@ -46,8 +46,10 @@ def test_train_writes_report_and_models(sessions, tmp_path):
     assert "Banned devices flagged as banned" in text
     for target in ("type", "band"):
         saved = joblib.load(models / f"{target}.joblib")
-        assert saved["features"] == features.FEATURE_COLS
-        assert len(saved["model"].predict([[0.0] * len(features.FEATURE_COLS)])) == 1
+        assert saved["features"] == train.TARGET_FEATURES[target]
+        assert len(saved["model"].predict([[0.0] * len(saved["features"])])) == 1
+    # the distance model never sees the room-wide spectrum features
+    assert not set(features.SPECTRUM_COLS) & set(train.TARGET_FEATURES["band"])
 
 
 def test_label_writes_template_with_strongest_device(sessions, tmp_path):

@@ -3,16 +3,19 @@ import type { Result, SpectrumMessage, StatusMessage } from "./contract"
 export const DEVICE_TYPES = ["phone", "earpiece", "smartwatch", "allowed"] as const
 export type DeviceType = (typeof DEVICE_TYPES)[number]
 
-export const BANDS = ["near", "mid", "far"] as const
+/**
+ * near: under 1 m from the unit. not_near: anything farther. Calibration showed
+ * that one unit cannot tell 1.5 m from 3.5 m indoors, so there is no mid or far.
+ */
+export const BANDS = ["near", "not_near"] as const
 export type Band = (typeof BANDS)[number]
 
-/** Upper edge of each distance band in metres, from docs/data-protocol.md. */
-export const BAND_EDGES_M: Record<Band, number> = { near: 1, mid: 2, far: 3.5 }
+/** Upper edge of each band in metres. not_near ends at the 3.5 m detection range. */
+export const BAND_EDGES_M: Record<Band, number> = { near: 1, not_near: 3.5 }
 
 /**
- * One model output for one device over one decision window.
- * This is the payload proposed in docs/contract.md. It is not on MQTT yet,
- * so only the Demo source produces it.
+ * One model output for one device over one decision window: the detection
+ * topic in docs/contract.md, published by the laptop's detector about once a second.
  */
 export interface Detection {
   ts: number

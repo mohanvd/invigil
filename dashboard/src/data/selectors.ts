@@ -107,3 +107,27 @@ export function mapDevices(state: HallState, allowed: AllowedDevice[], now: numb
     })
     .sort((a, b) => a.key.localeCompare(b.key))
 }
+
+/** A device to name in the search-mode banner. */
+export interface NearDevice {
+  key: string
+  addr: string | null
+  type: DeviceType
+  rssi: number | null
+  bandConf: number
+}
+
+/**
+ * Banned devices the model places within 1 m of the unit right now: detected
+ * in the last NEAR_STALE_MS, not allowed, not on the dashboard's whitelist.
+ * Strongest signal first, so the banner names the closest one.
+ */
+export const NEAR_STALE_MS = 3_000
+
+export function nearDevices(state: HallState, allowed: AllowedDevice[], now: number): NearDevice[] {
+  return Object.entries(state.detections)
+    .filter(([, d]) => d.band === "near" && d.type !== "allowed" && now - d.ts <= NEAR_STALE_MS)
+    .filter(([, d]) => allowedLabel(d.addr, allowed) === null)
+    .map(([key, d]) => ({ key, addr: d.addr, type: d.type, rssi: d.rssi, bandConf: d.band_conf }))
+    .sort((a, b) => (b.rssi ?? -127) - (a.rssi ?? -127))
+}

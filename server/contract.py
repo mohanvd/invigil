@@ -21,8 +21,16 @@ FIELDS = {
     "ble": ("ts", "node", "readings"),
     "spectrum": ("ts", "node", "sweeps", "hits"),
     "status": ("ts", "node", "uptime_s", "wifi_rssi", "fw"),
+    # Published by the laptop's detector (server/detector.py), not by the unit.
+    "detection": ("ts", "node", "addr", "type", "type_conf", "band", "band_conf", "rssi"),
 }
 KINDS = tuple(FIELDS)
+# The kinds the unit itself sends.
+UNIT_KINDS = ("ble", "spectrum", "status")
+
+DEVICE_TYPES = ("phone", "earpiece", "smartwatch", "allowed")
+# near is under 1 m from the unit. Design requirement 3 is near / not-near accuracy.
+BANDS = ("near", "not_near")
 
 # One advertisement inside a ble message.
 READING_FIELDS = ("ts", "addr", "rssi", "mfr")
@@ -114,6 +122,22 @@ def validate(kind: str, payload: object, node: str | None = None) -> dict:
         fw = payload["fw"]
         if not isinstance(fw, str) or not 1 <= len(fw) <= 32:
             raise ContractError("fw must be a version string of 1 to 32 chars")
+
+    elif kind == "detection":
+        addr = payload["addr"]
+        # null: a device seen only in the spectrum scan, with no address to report.
+        if addr is not None and (not isinstance(addr, str) or not _ADDR_RE.fullmatch(addr)):
+            raise ContractError("addr must be null or a hashed address: 12 lowercase hex chars")
+        if payload["type"] not in DEVICE_TYPES:
+            raise ContractError("type must be one of " + ", ".join(DEVICE_TYPES))
+        if payload["band"] not in BANDS:
+            raise ContractError("band must be one of " + ", ".join(BANDS))
+        for key in ("type_conf", "band_conf"):
+            value = payload[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                raise ContractError(f"{key} must be a number from 0 to 1")
+        if payload["rssi"] is not None:
+            _int(payload, "rssi", -127, 0)
 
     return payload
 

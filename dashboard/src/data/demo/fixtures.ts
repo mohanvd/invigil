@@ -13,7 +13,7 @@ import type {
 } from "../types"
 import { createRng } from "./rng"
 
-const RECORD_AT_M: Record<Band, number> = { near: 0.5, mid: 1.5, far: 3 }
+const RECORD_AT_M: Record<Band, number> = { near: 0.5, not_near: 2 }
 const RSSI_1M: Record<DeviceType, number> = { phone: -62, earpiece: -68, smartwatch: -64, allowed: -59 }
 const STATES: Record<DeviceType, string[]> = {
   phone: ["idle", "screen-on"],
@@ -22,7 +22,7 @@ const STATES: Record<DeviceType, string[]> = {
   allowed: ["normal"],
 }
 const TYPES: DeviceType[] = ["phone", "earpiece", "smartwatch", "allowed"]
-const BAND_ORDER: Band[] = ["near", "mid", "far"]
+const BAND_ORDER: Band[] = ["near", "not_near"]
 const FIRST_DAY = Date.UTC(2026, 8, 21, 7, 30)
 const UNLABELLED = 4
 const REQUIREMENT_IDS: RequirementResult["id"][] = [1, 2, 3, 4, 5, 6]

@@ -12,7 +12,7 @@ import { formatAgo, formatClock, formatDbm, formatPercent } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 import { BandChip } from "./band-chip"
-import { BAND_STYLE, DEVICE_LABEL } from "./bands"
+import { BAND_LABEL, BAND_STYLE, DEVICE_LABEL } from "./bands"
 import { DeviceTag, Hash } from "./device-tag"
 import { SignalRings } from "./signal-rings"
 
@@ -47,7 +47,7 @@ export function DetectionAlert({ alert, now, selected, onSelect, onStateChange }
         type="button"
         onClick={() => onSelect(alert)}
         aria-pressed={selected}
-        aria-label={`${device}, ${alert.band} band. Show signal strength.`}
+        aria-label={`${device}, ${BAND_LABEL[alert.band]}. Show signal strength.`}
         className="grid min-w-0 flex-1 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-sm text-left sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
       >
         <SignalRings band={alert.band} className={cn(!isNew && "opacity-70")} />

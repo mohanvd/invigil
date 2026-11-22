@@ -30,12 +30,8 @@ HASH_RE = re.compile(r"[0-9a-f]{12}")
 
 
 def band_for(distance_m: float) -> str:
-    """near is under 1 m, mid is 1 to 2 m, far is over 2 m (docs/data-protocol.md)."""
-    if distance_m < 1.0:
-        return BANDS[0]
-    if distance_m <= 2.0:
-        return BANDS[1]
-    return BANDS[2]
+    """near is under 1 m, not_near is 1 m or more (docs/data-protocol.md)."""
+    return BANDS[0] if distance_m < 1.0 else BANDS[1]
 
 
 def slug(name: str) -> str:
@@ -167,18 +163,18 @@ def run(
 
 
 def results_table(progress: Progress) -> str:
-    rows = [f"{'distance':>8}  {'band':<4}  {'readings':>8}  {'median RSSI':>11}"]
+    rows = [f"{'distance':>8}  {'band':<8}  {'readings':>8}  {'median RSSI':>11}"]
     for d in progress.distances:
         folder = progress.steps.get(step_key(d))
         if folder is None:
-            rows.append(f"{d:>7g}m  {band_for(d):<4}  {'not recorded':>22}")
+            rows.append(f"{d:>7g}m  {band_for(d):<8}  {'not recorded':>22}")
             continue
         ble = load_ble(Path(folder))
         mine = ble[ble["addr"].isin(progress.devices)] if not ble.empty else ble
         if mine.empty:
-            rows.append(f"{d:>7g}m  {band_for(d):<4}  {0:>8}  {'-':>11}")
+            rows.append(f"{d:>7g}m  {band_for(d):<8}  {0:>8}  {'-':>11}")
         else:
-            rows.append(f"{d:>7g}m  {band_for(d):<4}  {len(mine):>8}  {mine['rssi'].median():>7.1f} dBm")
+            rows.append(f"{d:>7g}m  {band_for(d):<8}  {len(mine):>8}  {mine['rssi'].median():>7.1f} dBm")
     return "\n".join(rows)
 
 

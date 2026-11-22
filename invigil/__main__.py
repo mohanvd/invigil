@@ -14,6 +14,7 @@ from pathlib import Path
 from invigil import ROOT, beacon, broker, calibrate, dashboard, monitor, ntp, procs
 from server import contract
 from server.config import load_config
+from server.detector import models_present
 from server.logger import session_dir
 
 STATUS_LISTEN_S = 12  # a little over the unit's 10 s status interval
@@ -66,6 +67,13 @@ def render(
     )
     lg = describe_process(records, "logger")
     lines.append(f"Logger       {lg['out']} (PID {lg['pid']})" if lg else "Logger       not running")
+    dt = describe_process(records, "detector")
+    if dt:
+        lines.append(f"Detector     running (PID {dt['pid']})")
+    elif not models_present():
+        lines.append("Detector     not running: no models in ml/models. Train them: python -m ml.train")
+    else:
+        lines.append("Detector     not running: no alerts will appear")
     web = describe_process(records, "dashboard")
     lines.append(f"Dashboard    {web['url']} (PID {web['pid']})" if web else "Dashboard    not running")
     for node in contract.NODE_IDS:
@@ -171,6 +179,13 @@ def cmd_start(args) -> int:
         records.append(lg)
         procs.save_run(records)
         ntp.record(out, "start", clock)
+
+        # Runs the saved models on live windows and publishes detections.
+        if models_present():
+            records.append(procs.spawn("detector", [sys.executable, "-m", "server.detector"]))
+            procs.save_run(records)
+        else:
+            print("No models in ml/models, so the detector is not started. Train them: python -m ml.train")
 
         url = dashboard.live_url(args.port, f"ws://localhost:{broker.WS_PORT}", cfg.username)
         web = procs.spawn("dashboard", dashboard.serve_cmd(args.port), url=f"http://127.0.0.1:{args.port}")
@@ -312,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ntp-server", default=ntp.DEFAULT_SERVER, help="server for the clock check")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("start", help="start the broker, its beacon, the logger and the dashboard")
+    p = sub.add_parser("start", help="start the broker, its beacon, the logger, the detector and the dashboard")
     p.add_argument("--session", help="logger session name (default: live-<time>)")
     p.add_argument("--port", type=int, default=dashboard.PORT, help="dashboard port (default: 8080)")
     p.set_defaults(func=cmd_start)

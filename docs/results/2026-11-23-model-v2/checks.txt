@@ -1,0 +1,44 @@
+Windows per device and distance (5 s windows, 1 s step)
+dist              0.5  1.0  1.5  2.0  2.5  3.0  3.5
+device                                             
+earpiece B class   55   55   55   54   54   55   52
+phone B            55   55   55   54   55   55   56
+phone B class      55   54   55    0    0    0    0
+phone C class      55   55   53   53   55    7   49
+
+== Near / not near, RSSI features only (the model used) ==
+A model that always says not_near scores 82.5% accuracy (balanced 50.0%).
+leave one session out  accuracy  89.7%   balanced  84.5%   near found 76.4%   not_near called near  7.4%
+predicted  near  not_near
+true                     
+near        168        52
+not_near     77       959
+leave one device out   accuracy  90.6%   balanced  84.5%   near found 75.0%   not_near called near  6.1%
+predicted  near  not_near
+true                     
+near        165        55
+not_near     63       973
+
+Share of windows called near, per device and distance (leave one session out)
+dist              0.5   1.0 1.5   2.0   2.5   3.0   3.5
+device                                                 
+earpiece B class  49%   27%  0%   11%    0%    2%    0%
+phone B           95%  100%  0%    0%    0%    0%    0%
+phone B class     69%    0%  0%  nan%  nan%  nan%  nan%
+phone C class     93%    0%  0%    0%    0%    0%    0%
+
+Without the 1.0 m sessions (on the edge): accuracy  97.6%   balanced  95.8%
+predicted  near  not_near
+true                     
+near        204        16
+not_near      9       808
+
+== Near / not near with other feature sets, leave one session out ==
+BLE timing and RSSI    accuracy  87.7%   balanced  79.7%   near found 67.3%
+BLE and manufacturer   accuracy  85.6%   balanced  73.5%   near found 55.0%
+
+== Type (phone vs earpiece), leave one session out ==
+all features (the model used)  accuracy 100.0%   balanced 100.0%
+BLE only, no spectrum          accuracy 100.0%   balanced 100.0%
+BLE timing and RSSI only       accuracy  96.9%   balanced  96.4%
+Leave one device out is not possible for type: there is only one earpiece.

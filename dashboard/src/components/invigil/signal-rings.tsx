@@ -4,18 +4,18 @@ import type { Band } from "@/data/types"
 import { BANDS } from "@/data/types"
 import { cn } from "@/lib/utils"
 
-import { BAND_STYLE } from "./bands"
+import { BAND_LABEL, BAND_STYLE } from "./bands"
 
-const RADIUS: Record<Band, number> = { near: 8, mid: 15, far: 22 }
+const RADIUS: Record<Band, number> = { near: 9, not_near: 20 }
 
 interface SignalRingsProps extends Omit<ComponentProps<"svg">, "children"> {
-  /** The band to light. null draws the unit with all three arcs quiet. */
+  /** The band to light. null draws the unit with both arcs quiet. */
   band: Band | null
 }
 
 /**
- * The unit on the front wall with three half arcs spreading into the room.
- * Only the current band's arc is lit, in its color.
+ * The unit on the front wall with two half arcs spreading into the room:
+ * near and not near. Only the current band's arc is lit, in its color.
  */
 export function SignalRings({ band, className, ...props }: SignalRingsProps) {
   return (
@@ -26,7 +26,7 @@ export function SignalRings({ band, className, ...props }: SignalRingsProps) {
       height="22.5"
       fill="none"
       role="img"
-      aria-label={band ? `${band} band` : "no band"}
+      aria-label={band ? BAND_LABEL[band] : "no band"}
       className={cn("shrink-0 text-foreground", className)}
       {...props}
     >

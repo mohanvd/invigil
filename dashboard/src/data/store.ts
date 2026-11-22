@@ -1,4 +1,4 @@
-import { decode } from "./contract"
+import { decode, detectionFieldProblem } from "./contract"
 import type {
   Alert,
   AlertState,
@@ -9,15 +9,12 @@ import type {
   HeardDevice,
   RejectReason,
 } from "./types"
-import { BANDS, DEVICE_TYPES } from "./types"
 
 export const MAX_READINGS_PER_DEVICE = 600
 export const MAX_STATUS_ENTRIES = 50
 export const MAX_REJECT_REASONS = 20
 export const RATE_WINDOW_MS = 10_000
 export const LATENCY_WINDOW_MS = 60_000
-
-const ADDR_RE = /^[0-9a-f]{12}$/
 
 function emptyState(now: number): HallState {
   return {
@@ -40,23 +37,10 @@ export function deviceKey(d: { addr: string | null; node: string; type: string }
   return d.addr ?? `${d.node}:spectrum:${d.type}`
 }
 
-function isUnitInterval(value: unknown): value is number {
-  return typeof value === "number" && value >= 0 && value <= 1
-}
-
-/** Check a detection against the proposed payload in docs/contract.md. */
+/** Check a detection against the detection topic in docs/contract.md. */
 export function detectionProblem(d: Detection): string | null {
   if (!Number.isInteger(d.ts)) return "ts must be an integer"
-  if (d.addr !== null && !ADDR_RE.test(d.addr)) return "addr must be null or a hashed address"
-  if (!DEVICE_TYPES.includes(d.type)) return "unknown device type"
-  if (!BANDS.includes(d.band)) return "unknown distance band"
-  if (!isUnitInterval(d.type_conf) || !isUnitInterval(d.band_conf)) {
-    return "confidence must be between 0 and 1"
-  }
-  if (d.rssi !== null && (!Number.isInteger(d.rssi) || d.rssi < -127 || d.rssi > 0)) {
-    return "rssi must be null or an integer from -127 to 0"
-  }
-  return null
+  return detectionFieldProblem(d as unknown as Record<string, unknown>)
 }
 
 export interface HallStore extends DataSink {
@@ -127,6 +111,45 @@ export function createHallStore(options: StoreOptions = {}): HallStore {
     state.latencies = kept
   }
 
+  function addDetection(d: Detection, rxTs: number) {
+    const key = deviceKey(d)
+    state.detections = { ...state.detections, [key]: d }
+    state.counts = { ...state.counts, detection: state.counts.detection + 1 }
+
+    // Allowed devices are tracked for the hall map but never raise an alert.
+    if (d.type !== "allowed") {
+      const existing = state.alerts.find((a) => a.id === key)
+      if (existing) {
+        const updated: Alert = {
+          ...existing,
+          type: d.type,
+          band: d.band,
+          typeConf: d.type_conf,
+          bandConf: d.band_conf,
+          rssi: d.rssi,
+          lastTs: d.ts,
+        }
+        state.alerts = state.alerts.map((a) => (a.id === key ? updated : a))
+      } else {
+        const created: Alert = {
+          id: key,
+          node: d.node,
+          addr: d.addr,
+          type: d.type,
+          band: d.band,
+          typeConf: d.type_conf,
+          bandConf: d.band_conf,
+          rssi: d.rssi,
+          firstTs: d.ts,
+          lastTs: d.ts,
+          latencyMs: rxTs - d.ts,
+          state: "new",
+        }
+        state.alerts = [created, ...state.alerts]
+      }
+    }
+  }
+
   return {
     subscribe(listener) {
       listeners.add(listener)
@@ -165,6 +188,8 @@ export function createHallStore(options: StoreOptions = {}): HallStore {
         }
         state.heard = heard
         state.counts = { ...state.counts, ble: state.counts.ble + msg.payload.readings.length }
+      } else if (msg.kind === "detection") {
+        addDetection(msg.payload, rxTs)
       } else if (msg.kind === "spectrum") {
         state.spectrum = msg.payload
         state.counts = { ...state.counts, spectrum: state.counts.spectrum + 1 }
@@ -183,42 +208,7 @@ export function createHallStore(options: StoreOptions = {}): HallStore {
         reject(`detection: ${problem}`, rxTs)
         return
       }
-      const key = deviceKey(d)
-      state.detections = { ...state.detections, [key]: d }
-      state.counts = { ...state.counts, detection: state.counts.detection + 1 }
-
-      // Allowed devices are tracked for the hall map but never raise an alert.
-      if (d.type !== "allowed") {
-        const existing = state.alerts.find((a) => a.id === key)
-        if (existing) {
-          const updated: Alert = {
-            ...existing,
-            type: d.type,
-            band: d.band,
-            typeConf: d.type_conf,
-            bandConf: d.band_conf,
-            rssi: d.rssi,
-            lastTs: d.ts,
-          }
-          state.alerts = state.alerts.map((a) => (a.id === key ? updated : a))
-        } else {
-          const created: Alert = {
-            id: key,
-            node: d.node,
-            addr: d.addr,
-            type: d.type,
-            band: d.band,
-            typeConf: d.type_conf,
-            bandConf: d.band_conf,
-            rssi: d.rssi,
-            firstTs: d.ts,
-            lastTs: d.ts,
-            latencyMs: rxTs - d.ts,
-            state: "new",
-          }
-          state.alerts = [created, ...state.alerts]
-        }
-      }
+      addDetection(d, rxTs)
       touch()
     },
 

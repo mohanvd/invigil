@@ -82,11 +82,11 @@ def test_spectrum_shows_wifi_block_and_bluetooth_hopping():
 
 def test_band_edges_match_the_data_protocol():
     assert [band_of(d) for d in (0.5, 0.99, 1.0, 1.5, 2.0, 3.0, 3.49)] == [
-        "near", "near", "mid", "mid", "far", "far", "far"]
+        "near", "near", "not_near", "not_near", "not_near", "not_near", "not_near"]
     assert band_of(3.5) == "out of range"
 
 
 def test_every_device_has_a_type_and_a_band():
     devices = default_devices("test-salt", random.Random(1))
     assert {d.kind for d in devices} == {"phone", "earpiece", "smartwatch", "allowed"}
-    assert {d.band for d in devices} == {"near", "mid", "far"}
+    assert {d.band for d in devices} == {"near", "not_near"}
