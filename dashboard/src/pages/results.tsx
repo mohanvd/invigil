@@ -90,8 +90,8 @@ export function ResultsPage() {
 
       <Panel
         className="col-span-12 xl:col-span-5"
-        title="Distance band confusion matrix"
-        description="Rows are the true band, columns the predicted band."
+        title="Near / not-near confusion matrix"
+        description="Rows are the true answer, columns the predicted one."
         actions={chip}
       >
         {loading ? (
@@ -101,13 +101,13 @@ export function ResultsPage() {
             matrix={report.bandMatrix}
             caption={
               sample
-                ? `Figure (2) Distance band. ${SAMPLE_NOTE}`
-                : "Figure (2) Distance band, counted in 5 s windows from held-out sessions."
+                ? `Figure (2) Near / not near. ${SAMPLE_NOTE}`
+                : "Figure (2) Near / not near, counted in 5 s windows from held-out sessions."
             }
           />
         ) : (
           <EmptyState icon={<Grid3x3Icon />} title="No confusion matrix yet">
-            The counts of true against predicted distance band appear here. {NO_RUN}
+            The counts of true against predicted near / not near appear here. {NO_RUN}
           </EmptyState>
         )}
       </Panel>
@@ -124,14 +124,14 @@ export function ResultsPage() {
           <figure className="flex flex-col gap-3">
             <RssiDistanceChart points={report.rssiByDistance} />
             <figcaption className="text-[13px] text-muted-foreground">
-              Figure (3) Median RSSI against distance from the unit. The shaded bands are near, mid and far.
+              Figure (3) Median RSSI against distance from the unit. The shaded zones are near (under 1 m) and not near.
               {sample ? ` ${SAMPLE_NOTE}` : ""}
             </figcaption>
           </figure>
         ) : (
           <EmptyState icon={<ChartScatterIcon />} title="No calibration data yet">
-            Each labelled session adds one dot: its median RSSI at its measured distance, over the near, mid and far
-            bands. {NO_RUN}
+            Each labelled session adds one dot: its median RSSI at its measured distance, over the near and not-near
+            zones. {NO_RUN}
           </EmptyState>
         )}
       </Panel>

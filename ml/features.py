@@ -54,7 +54,12 @@ KNOWN_MFR = {
 
 TYPES = ("phone", "earpiece", "smartwatch", "allowed")
 BANNED = ("phone", "earpiece", "smartwatch")
-BANDS = ("near", "mid", "far")
+# The distance model answers one question: is the device within 1 m of the unit?
+# Calibration on 2026-11-22 showed that RSSI from one unit cannot tell 1.5 m from
+# 3.5 m indoors, so the old mid and far bands are merged into not_near.
+BANDS = ("near", "not_near")
+# Labels a session.json may use. Sessions recorded before the change say mid or far.
+LABEL_BANDS = ("near", "not_near", "mid", "far")
 
 # BLE advertising channels 37, 38, 39 sit at 2402, 2426, 2480 MHz.
 BLE_ADV_CHANNELS = (2, 26, 80)
@@ -83,6 +88,14 @@ SPECTRUM_COLS = [
     "spec_adv_frac",
 ]
 FEATURE_COLS = BLE_COLS + MFR_COLS + SPECTRUM_COLS
+# The distance model sees signal strength only.
+# - No spectrum features: the nRF24 sees the whole room, not one device, and its
+#   features followed the room's Wi-Fi load over the afternoon rather than
+#   distance (docs/results/2026-11-22-first-model).
+# - No manufacturer or advertising-timing features: they identify the device,
+#   so the model learned "this device was mostly recorded far away" instead of
+#   distance (docs/results/2026-11-23-model-v2).
+BAND_FEATURE_COLS = ["rssi_mean", "rssi_median", "rssi_std", "rssi_min", "rssi_max"]
 META_COLS = ["session", "node", "addr", "t_start", "type", "band"]
 
 
@@ -107,8 +120,8 @@ def load_meta(session_dir: Path) -> dict:
             raise SessionError(f"{path}: {addr!r} is not a 12-char hashed address")
         if info.get("type") not in TYPES:
             raise SessionError(f"{path}: {addr} type must be one of {', '.join(TYPES)}")
-        if info.get("band") not in BANDS:
-            raise SessionError(f"{path}: {addr} band must be one of {', '.join(BANDS)}")
+        if info.get("band") not in LABEL_BANDS:
+            raise SessionError(f"{path}: {addr} band must be one of {', '.join(LABEL_BANDS)}")
     meta.setdefault("name", Path(session_dir).name)
     return meta
 
@@ -131,6 +144,13 @@ def load_spectrum(session_dir: Path) -> pd.DataFrame:
 
 
 # --- feature math -----------------------------------------------------------
+
+
+def model_band(label: str | None) -> str | None:
+    """The band the model learns for a session.json label: mid and far become not_near."""
+    if label is None:
+        return None
+    return "near" if label == "near" else "not_near"
 
 
 def ble_features(ts_ms: np.ndarray, rssi: np.ndarray, mfr: str) -> dict:
@@ -246,7 +266,7 @@ def session_features(session_dir: Path, labeled_only: bool = True) -> pd.DataFra
                 "addr": addr,
                 "t_start": t0,
                 "type": labels.get("type"),
-                "band": labels.get("band"),
+                "band": model_band(labels.get("band")),
             }
             row.update(ble_features(g["ts"].to_numpy(), g["rssi"].to_numpy(dtype=float), mfr))
             row.update(spec_feats)

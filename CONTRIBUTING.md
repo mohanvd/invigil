@@ -55,7 +55,7 @@ These are not optional. A pull request that breaks one will be closed.
 
 - **Receive only.** The nRF24L01 is used only as a receiver. We do not accept code that transmits to jam or interfere with any signal.
 - **Firmware** uses the official Pico SDK in C with CMake. No Arduino, Arduino-Pico core, PlatformIO or ESP boards.
-- **The models stay narrow.** They answer device type and distance band. Ask before adding classes, seat zones or multi-unit location.
+- **The models stay narrow.** They answer device type and near / not near. Ask before adding classes, seat zones or multi-unit location.
 - **Do not assume hardware behavior.** If something depends on range, thresholds, timing or byte order, say so and propose a test.
 - **Results** from a calibration or test run go in `docs/results/YYYY-MM-DD-<name>/` with the raw summary, plots and a short note.
 - **Writing:** plain, direct English in docs and UI text.

@@ -3,12 +3,13 @@ import { useMemo, useState } from "react"
 
 import { useData, useHall, useNow } from "@/app/data"
 import { useSettings } from "@/app/settings"
-import { BAND_RANGE, DEVICE_LABEL } from "@/components/invigil/bands"
+import { BAND_LABEL, BAND_RANGE, DEVICE_LABEL } from "@/components/invigil/bands"
 import { RssiTimeChart } from "@/components/invigil/charts"
 import { DetectionAlert } from "@/components/invigil/detection-alert"
 import { EmptyState } from "@/components/invigil/empty-state"
 import { HallMap } from "@/components/invigil/hall-map"
 import { Metric } from "@/components/invigil/metric"
+import { NearBanner } from "@/components/invigil/near-banner"
 import { Page, Panel } from "@/components/page"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,6 +21,7 @@ import {
   falseAlarmsPerHour,
   mapDevices,
   messageLatencyP50,
+  nearDevices,
   visibleAlerts,
 } from "@/data/selectors"
 import type { AlertFilter } from "@/data/selectors"
@@ -32,6 +34,7 @@ const ALERT_TYPES = DEVICE_TYPES.filter((t) => t !== "allowed")
 function LoadingLive() {
   return (
     <>
+      <Skeleton className="col-span-12 h-[60px] rounded-lg" />
       {[0, 1, 2, 3].map((i) => (
         <Skeleton key={i} className="col-span-6 h-[116px] rounded-lg xl:col-span-3" />
       ))}
@@ -57,6 +60,7 @@ export function LivePage() {
     [hall.alerts, settings.allowed]
   )
   const devices = mapDevices(hall, settings.allowed, now)
+  const near = nearDevices(hall, settings.allowed, now)
   const heard = devicesHeard(hall, now)
   const everHeard = useMemo(() => Object.values(hall.heard).sort((a, b) => b.lastTs - a.lastTs), [hall.heard])
 
@@ -82,12 +86,13 @@ export function LivePage() {
   return (
     <Page
       title="Live"
-      description={`${settings.hallName}: one unit on the front wall, listening for phones, earpieces and smartwatches.`}
+      description={`${settings.hallName}: watch mode with the unit on the invigilator's desk, search mode carrying it along the rows.`}
     >
       {connecting ? (
         <LoadingLive />
       ) : (
         <>
+          <NearBanner className="col-span-12" devices={near} />
           <Metric
             className="col-span-6 xl:col-span-3"
             label="Active alerts"
@@ -96,7 +101,7 @@ export function LivePage() {
               allAlerts.length === 0
                 ? isDemo
                   ? "No device has been flagged yet."
-                  : "Detections are not on MQTT yet."
+                  : "No device has been flagged yet. The detector decides about once a second."
                 : `${allAlerts.length} raised since this page opened.`
             }
           />
@@ -130,7 +135,7 @@ export function LivePage() {
           <Panel
             className="col-span-12 xl:col-span-5"
             title="Hall map"
-            description="Seen from above. The bands spread from the unit."
+            description="Seen from above. The near zone is under 1 m from the unit."
           >
             <div className="relative">
               <HallMap
@@ -144,14 +149,14 @@ export function LivePage() {
                 <div className="absolute inset-x-6 bottom-6 rounded-md border bg-card">
                   <EmptyState className="py-4" icon={<MapPinOffIcon />} title="No devices on the map">
                     {isDemo
-                      ? "A device appears in its band once the model has flagged it. None was detected in the last 15 s."
-                      : "Devices appear in their band once detections are published. The detection topic is only a proposal so far, so the map fills in Demo only."}
+                      ? "A device appears in its zone once the model has flagged it. None was detected in the last 15 s."
+                      : "A device appears in its zone once the detector flags it. None was detected in the last 15 s. If this stays empty, check that invigil status shows the detector running."}
                   </EmptyState>
                 </div>
               ) : null}
             </div>
             <p className="mt-3 text-[13px] text-muted-foreground">
-              Devices are placed by distance band only. Where a device sits along its arc is not measured.
+              Devices are placed by near or not near only. Where a device sits along its arc is not measured.
             </p>
           </Panel>
 
@@ -179,14 +184,14 @@ export function LivePage() {
                   </SelectContent>
                 </Select>
                 <Select value={filter.band} onValueChange={(value) => setFilter((f) => ({ ...f, band: value as Band | "all" }))}>
-                  <SelectTrigger size="sm" className="w-36" aria-label="Filter by distance band">
+                  <SelectTrigger size="sm" className="w-36" aria-label="Filter by near or not near">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All bands</SelectItem>
+                    <SelectItem value="all">All distances</SelectItem>
                     {BANDS.map((b) => (
                       <SelectItem key={b} value={b}>
-                        <span className="capitalize">{b}</span>
+                        <span className="capitalize">{BAND_LABEL[b]}</span>
                         <span className="text-muted-foreground">{BAND_RANGE[b]}</span>
                       </SelectItem>
                     ))}
@@ -198,10 +203,10 @@ export function LivePage() {
             {alerts.length === 0 ? (
               <EmptyState className="flex-1" icon={<BellOffIcon />} title="No alerts to show">
                 {allAlerts.length > 0
-                  ? "No alert matches these filters. Change the device type or the band to see the others."
+                  ? "No alert matches these filters. Change the device type or near / not near to see the others."
                   : isDemo
                     ? "An alert appears here when the model flags a phone, an earpiece or a smartwatch. Nothing has been flagged yet."
-                    : "An alert appears here when the model flags a device. Detections are not published on MQTT yet, so this list fills in Demo only."}
+                    : "An alert appears here when the detector flags a phone, an earpiece or a smartwatch. Nothing has been flagged yet."}
               </EmptyState>
             ) : (
               <ul className="flex max-h-[30rem] flex-col gap-2 overflow-y-auto p-3">

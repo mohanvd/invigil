@@ -69,7 +69,7 @@ def check(path: Path) -> list[str]:
         except (contract.ContractError, ValueError) as e:
             errors.append(f"{path}:{lineno}: {e}")
 
-    for kind in contract.KINDS:
+    for kind in contract.UNIT_KINDS:  # detection comes from the laptop, not the unit
         if kinds[kind] == 0:
             errors.append(f"no {kind} sample in {path}")
     if hashes == 0:
@@ -77,7 +77,7 @@ def check(path: Path) -> list[str]:
     if beacons == 0:
         errors.append(f"no beacons in {path}")
     if not errors:
-        counts = ", ".join(f"{kinds[k]} {k}" for k in contract.KINDS)
+        counts = ", ".join(f"{kinds[k]} {k}" for k in contract.UNIT_KINDS)
         print(f"contract check passed: {counts}, {hashes} hash vectors, {beacons} beacons")
     return errors
 

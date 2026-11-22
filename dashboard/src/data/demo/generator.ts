@@ -19,8 +19,10 @@ export const SEND_MS = 200
 export const CYCLE_MS = SCAN_MS + SEND_MS
 export const SWEEPS = 20
 const STATUS_EVERY_CYCLES = 10
-/** The model decides once per 5 s window (design requirement 1). */
-const DETECT_EVERY_CYCLES = 5
+/** Each decision covers the last 5 s of readings (design requirement 1). */
+const WINDOW_CYCLES = 5
+/** The detector decides about once a second, after each scan window (docs/contract.md, Detections). */
+const DETECT_EVERY_CYCLES = 1
 /** Scan windows a device is on air before the first detection. */
 const DETECT_AFTER_CYCLES = 3
 
@@ -61,9 +63,7 @@ export interface DemoCycle {
 }
 
 export function bandOf(distanceM: number): Band {
-  if (distanceM < BAND_EDGES_M.near) return "near"
-  if (distanceM < BAND_EDGES_M.mid) return "mid"
-  return "far"
+  return distanceM < BAND_EDGES_M.near ? "near" : "not_near"
 }
 
 function pathLossDb(distanceM: number): number {
@@ -207,7 +207,7 @@ export function createDemoGenerator(seed: number, epoch: number): DemoGenerator 
       }
       const recent = windows.get(dev) ?? []
       recent.push(heard)
-      windows.set(dev, recent.slice(-DETECT_EVERY_CYCLES))
+      windows.set(dev, recent.slice(-WINDOW_CYCLES))
     }
     ble.sort((a, b) => a.ts - b.ts)
     // Like the unit: the window's readings go out together after the scan window.

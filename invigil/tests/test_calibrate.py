@@ -51,7 +51,7 @@ def progress(tmp_path):
 
 def test_bands_follow_the_data_protocol():
     assert [calibrate.band_for(d) for d in calibrate.DISTANCES] == [
-        "near", "mid", "mid", "mid", "far", "far", "far",
+        "near", "not_near", "not_near", "not_near", "not_near", "not_near", "not_near",
     ]
 
 
@@ -83,8 +83,8 @@ def test_full_run_labels_every_step_and_prints_medians(tmp_path, progress):
 
     rows = {line.split()[0]: line.split()[1:] for line in said[-1].strip().splitlines()[1:]}
     assert rows["0.5m"] == ["near", "20", "-49.0", "dBm"]
-    assert rows["2m"] == ["mid", "20", "-65.0", "dBm"]
-    assert rows["3.5m"] == ["far", "20", "-75.0", "dBm"]
+    assert rows["2m"] == ["not_near", "20", "-65.0", "dBm"]
+    assert rows["3.5m"] == ["not_near", "20", "-75.0", "dBm"]
 
 
 def test_progress_is_saved_and_a_stopped_run_resumes(tmp_path, progress):

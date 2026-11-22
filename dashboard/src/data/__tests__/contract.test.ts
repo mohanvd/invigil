@@ -20,12 +20,16 @@ describe("parseTopic", () => {
     expect(parseTopic("invigil/node/N1/ble")).toEqual({ ok: true, value: { node: "N1", kind: "ble" } })
   })
 
+  it("accepts the detection topic the laptop detector publishes", () => {
+    expect(parseTopic("invigil/node/N1/detection")).toEqual({ ok: true, value: { node: "N1", kind: "detection" } })
+  })
+
   it.each([
     "invigil/node/N1",
     "invigil/node/N1/ble/extra",
     "other/node/N1/ble",
     "invigil/node/N9/ble",
-    "invigil/node/N1/detection",
+    "invigil/node/N1/alert",
     "invigil/node/N1/toString",
   ])("rejects %s", (name) => {
     expect(parseTopic(name).ok).toBe(false)

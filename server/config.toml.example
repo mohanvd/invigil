@@ -13,3 +13,15 @@ password = ""
 # Use a long random string, for example the output of:
 #   python -c "import secrets; print(secrets.token_hex(16))"
 hash_salt = ""
+
+[whitelist]
+# Devices permitted in the hall, such as the invigilator's phone, as hashed
+# addresses (12 hex chars, the same hash the dashboard and logger show).
+# The detector reports them with type "allowed", and they never raise an alert.
+# Find a device's hash with: python -m ml.label data/raw/<session>
+allowed = []
+
+[detector]
+# Devices weaker than this median RSSI (dBm) over a 5 s window are ignored,
+# so phones in neighbouring rooms do not raise alerts.
+min_rssi = -85

@@ -19,10 +19,17 @@ One sensor unit sits at the edge of a 6-seat mini exam hall. It is a Raspberry P
 - **BLE scanner.** The Pico's own radio hears Bluetooth Low Energy advertisements and reads the signal strength (RSSI) and the manufacturer ID. The address is hashed on the unit.
 - **Channel scanner.** The nRF24L01 sweeps 126 channels of the 2.4 GHz band and counts where it hears a carrier. Bluetooth audio shows up as scattered hits across the band because it hops between channels. Wi-Fi shows up as fixed blocks.
 
-The unit sends its readings over Wi-Fi with MQTT to a laptop. On the laptop, a model answers two questions about each device:
+The unit sends its readings over Wi-Fi with MQTT to a laptop. On the laptop, two models answer two questions about each device:
 
-1. **Device type:** phone, earpiece, smartwatch, or allowed (a proctor's device).
-2. **Distance band from the unit:** near (under 1 m), mid (1 to 2 m), or far (2 to 3.5 m).
+1. **Device type:** phone, earpiece or smartwatch. Allowed devices (a proctor's phone) come from a whitelist of hashes.
+2. **Near or not near:** is the device within 1 m of the unit?
+
+It is used in two ways:
+
+- **Watch mode.** The unit sits on the invigilator's desk and reports every banned device in the hall, with its type.
+- **Search mode.** The invigilator carries the unit along the rows. A `NEAR` alert (under 1 m) marks the seat.
+
+There is no finer distance than near or not near. Calibration showed that the signal strength from one unit cannot tell 1.5 m from 3.5 m indoors ([report](docs/results/2026-11-22-first-model/report.md)).
 
 ```mermaid
 flowchart LR
@@ -33,9 +40,9 @@ flowchart LR
     end
     U -->|Wi-Fi, MQTT| M["Mosquitto broker on the laptop"]
     M --> L["Logger: checks each message, writes CSV"]
-    L --> F["Features per time window"]
+    M --> F["Detector: features per 5 s window, about once a second"]
     F --> T["Model 1: device type"]
-    F --> R["Model 2: distance band"]
+    F --> R["Model 2: near or not near"]
     T --> A["Dashboard: alerts and hall map"]
     R --> A
 ```
@@ -49,7 +56,7 @@ Invigil is a Grade 12 school capstone and a work in progress. **The sensor unit 
 Working on the real unit (first run 2026-10-26, see [docs/results](docs/results/)):
 
 - **Firmware** (`firmware/`): every self-check passes on the Pico 2 W. The unit scans BLE and the 2.4 GHz band and publishes over Wi-Fi with MQTT, with nothing rejected by the contract. The BTstack address byte order is checked and correct. The timing values are still starting guesses. See [Unit firmware](docs/firmware.md).
-- **Launcher** (`invigil/`): starts the broker, the logger and the dashboard with one command, and runs guided calibration.
+- **Launcher** (`invigil/`): starts the broker, the logger, the detector and the dashboard with one command, and runs guided calibration.
 - **Dashboard** in Live mode, reading the unit through Mosquitto.
 
 First latency figure, with the laptop clock checked against NTP: over 10 minutes, every message from the unit reached the laptop within 1.11 s, nothing was dropped ([report](docs/results/2026-10-26-latency/report.md)). The figures from the first boot are not valid, because the laptop clock was off then.
@@ -57,6 +64,7 @@ First latency figure, with the laptop clock checked against NTP: over 10 minutes
 Also working, and testable on a laptop with no hardware:
 
 - **Logger** (`server/logger.py`): subscribes to the unit's topics, checks every message against the contract, and writes valid readings to CSV.
+- **Detector** (`server/detector.py`): runs the trained models on live 5 s windows about once a second and publishes detections on MQTT. Allowed devices come from a whitelist in `server/config.toml`.
 - **Fake publisher** (`server/fake_publisher.py`): stands in for the unit and publishes readings in the right format. The numbers are placeholders, not physics.
 - **ML pipeline** (`ml/`): turns logged sessions into features, trains both models, and tests them on held-out sessions. It has only been run on synthetic data, which proves the code runs and nothing more.
 - **Dashboard** (`dashboard/`): the web app, with a Demo source that needs no broker and a Live source that reads Mosquitto over WebSockets. Alerts and sessions only exist in Demo so far, and no test results exist at all. See [Dashboard](#dashboard).
@@ -161,7 +169,7 @@ You can run the whole laptop side with fake data and no hardware. These commands
 
 ### One command for the real unit
 
-When the unit is on the network, the launcher runs the whole laptop side: Mosquitto with `server/mosquitto.conf`, the broker beacon the unit uses to [find the laptop](docs/firmware.md#finding-the-broker), the logger, and the dashboard on `http://127.0.0.1:8080`. It waits for the unit, opens the dashboard in Live mode and shows a status screen (broker, logger session, unit online, last status, message rates, laptop clock offset).
+When the unit is on the network, the launcher runs the whole laptop side: Mosquitto with `server/mosquitto.conf`, the broker beacon the unit uses to [find the laptop](docs/firmware.md#finding-the-broker), the logger, the detector, and the dashboard on `http://127.0.0.1:8080`. It waits for the unit, opens the dashboard in Live mode and shows a status screen (broker, logger session, unit online, last status, message rates, laptop clock offset).
 
 ```powershell
 python -m invigil start
@@ -202,7 +210,7 @@ The dashboard reads everything through one data interface with two sources. Pick
 - **Demo** (the default) makes mock readings in the browser. They follow the [MQTT contract](docs/contract.md) and use the same placeholder numbers as the fake publisher: the right shape, not the right physics. A "Demo data" badge stays in the top bar while Demo is active.
 - **Live** connects to Mosquitto with mqtt.js over WebSockets and subscribes to `invigil/node/+/+`.
 
-Detections (device type and distance band) are not published on MQTT yet. The topic is only a proposal at the end of the [MQTT contract](docs/contract.md). So in Live the hall map and the alerts list stay empty and say why, and Sessions only fills in Demo until the server has an API for it.
+In Live, the alerts, the hall map and the `NEAR` banner fill from the detector's messages ([Detections](docs/contract.md#detections)), so the detector must be running (`invigil start` runs it). Sessions only fills in Demo until the server has an API for it.
 
 Demo never shows a result. On the Results page every requirement is pending in both sources, and the confusion matrices and the RSSI chart in Demo are marked as sample data.
 
@@ -275,7 +283,7 @@ The hall size and the seat positions on the map are placeholders in `dashboard/s
 | --- | --- |
 | `firmware/` | Pico 2 W unit code (Pico SDK, C, CMake) |
 | `invigil/` | The launcher: `python -m invigil start`, `stop`, `status`, `calibrate` |
-| `server/` | MQTT logger, fake data publisher, later the dashboard API |
+| `server/` | MQTT logger, detector, fake data publisher, later the dashboard API |
 | `ml/` | `features.py`, `label.py`, `train.py`, `synth.py` |
 | `data/raw/` | Recorded sessions. Gitignored, never committed |
 | `data/samples/` | Small anonymized samples that are safe to commit |
@@ -285,13 +293,13 @@ The hall size and the seat positions on the map are placeholders in `dashboard/s
 
 ## Design requirements
 
-The prototype is tested against these six requirements. None has been measured yet.
+The prototype is tested against these six requirements. First results on the 2026-11-22 calibration sessions are in [model v2](docs/results/2026-11-23-model-v2/report.md); none is a final result yet.
 
 | # | Requirement | Target |
 | --- | --- | --- |
 | 1 | Response time | At most 5 s from when a device starts transmitting |
 | 2 | Device type accuracy | At least 85% on held-out sessions |
-| 3 | Distance band accuracy | At least 80% on held-out sessions |
+| 3 | Near / not-near accuracy | At least 80% on held-out sessions. Near means under 1 m from the unit. This replaced three distance bands (near, mid, far) because calibration showed RSSI cannot separate 1.5 m from 3.5 m indoors with one unit |
 | 4 | Alert latency | Unit to dashboard within 2 s |
 | 5 | False alarms | At most 1 per exam hour |
 | 6 | Detection range | At least 3 m, covering a 6-seat mini hall |
@@ -306,7 +314,7 @@ Phase 1, one unit:
 - [ ] Calibration: signal strength at each distance, sweep timing, thresholds
 - [ ] Dataset: about 72 labeled sessions plus a sealed test set
 - [x] Dashboard on demo data and on live readings from the broker
-- [ ] Detections on MQTT, so the live hall map and alerts fill from the real models
+- [x] Detections on MQTT, so the live hall map and alerts fill from the real models
 - [ ] Digital twin built from the calibration data
 
 Phase 2, later:

@@ -61,11 +61,9 @@ The unit publishes over plain MQTT on port 1883. The dashboard runs in a browser
 
 The unit learns the broker's address from a UDP beacon the launcher broadcasts on port 18830. It is not an MQTT message and carries no readings. See [Finding the broker](firmware.md#finding-the-broker).
 
-## Proposed
+## Detections
 
-Not implemented. Nothing publishes this topic yet, `server/contract.py` rejects it, and the dashboard only shows detections from its Demo source. Agree on it here before building the Python side.
-
-The model runs on the laptop, not on the unit. Once per decision window it publishes one message for each device it has an answer for:
+Published by the laptop, not by the unit: `server/detector.py` runs the saved models and `invigil start` starts it. Each time a batch of BLE readings arrives from a unit (about once a second, right after each scan window), and at least once a second, it looks at the last 5 s of that unit's readings and publishes one message for each device it reports:
 
 ```
 invigil/node/{node_id}/detection
@@ -74,24 +72,25 @@ invigil/node/{node_id}/detection
 
 | Field | Meaning |
 | --- | --- |
-| `ts` | End of the decision window, ms since epoch, on the unit's clock (the `ts` of the last reading used). `rx_ts - ts` at the dashboard is then the alert latency of design requirement 4. |
+| `ts` | The `ts` of the last reading used, ms since epoch, on the unit's clock. `rx_ts - ts` at the dashboard is then the alert latency of design requirement 4. |
 | `node` | The unit whose readings were used. Must match the topic. |
-| `addr` | The 12-char hashed address, or `null` when the device was only seen in the spectrum scan (an earpiece that streams audio without advertising). |
+| `addr` | The 12-char hashed address, or `null` for a device seen only in the spectrum scan. The detector does not publish `null` yet: it only reports devices it hears on BLE. |
 | `type` | `phone`, `earpiece`, `smartwatch` or `allowed`. |
-| `type_conf` | Model confidence in `type`, from 0 to 1. |
-| `band` | `near`, `mid` or `far`. |
+| `type_conf` | Model confidence in `type`, from 0 to 1. Always 1 for `allowed`. |
+| `band` | `near` (under 1 m from the unit) or `not_near`. |
 | `band_conf` | Model confidence in `band`, from 0 to 1. |
 | `rssi` | Median RSSI over the window in dBm, an integer from -127 to 0, or `null` when there were no BLE readings. |
 
 Rules:
 
-- The topic keeps the `invigil/node/{node_id}/...` format, so the dashboard's existing subscription already receives it.
-- One message per device per window. A device that is still there is reported again in the next window, so the dashboard can tell when it leaves. The dashboard keeps one alert per device and updates it.
-- `allowed` devices are reported too, so the hall map can show them. They never raise an alert.
+- There are two bands, not three. Calibration on 2026-11-22 showed that RSSI from one unit cannot tell 1.5 m from 3.5 m indoors ([first model report](results/2026-11-22-first-model/report.md)), so `mid` and `far` became `not_near`. Old session labels `mid` and `far` are read as `not_near`.
+- A device is reported only when it sent at least 2 advertisements in the window and its median RSSI is at least `min_rssi` (`[detector]` in `server/config.toml`, default -85 dBm), so devices in neighbouring rooms stay out.
+- `allowed` comes from a whitelist of hashes (`[whitelist] allowed` in `server/config.toml`), not from the model. Allowed devices are still reported, so the hall map can show them. They never raise an alert.
+- A device that is still there is reported again at the next decision, so the dashboard can tell when it leaves. The dashboard keeps one alert per device and updates it.
+- The logger records detections in `detection.csv` like any other kind.
 - Same privacy rule as the rest of the contract: hashed addresses only, no payload bytes.
 
 Open questions:
 
-- Window length. 5 s matches design requirement 1 but has to be checked against how many sweeps fit in a window on the real unit.
-- With `addr` set to `null`, two spectrum-only devices of the same type cannot be told apart. Whether that matters depends on how the earpiece behaves on real hardware (see `docs/data-protocol.md`).
-- Whether `allowed` comes from the model or from a whitelist of hashes (open decision 1 in `docs/data-protocol.md`). The payload is the same either way.
+- With `addr` set to `null`, two spectrum-only devices of the same type cannot be told apart. Whether that matters depends on how an earpiece behaves while it streams audio on real hardware (see `docs/data-protocol.md`).
+- `min_rssi` is set from one empty-room baseline in the fab lab. Check it with a baseline in the real hall (design requirement 5).

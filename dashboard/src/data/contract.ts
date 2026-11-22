@@ -3,6 +3,9 @@
 // This mirrors server/contract.py field for field. If the contract changes,
 // change docs/contract.md, server/contract.py and this file together.
 
+import type { Detection } from "./types"
+import { BANDS, DEVICE_TYPES } from "./types"
+
 export const TOPIC_ROOT = "invigil/node"
 export const SUBSCRIPTION = `${TOPIC_ROOT}/+/+`
 // One sensor unit for now. Phase 2 adds units here; the topic format stays the same.
@@ -48,6 +51,8 @@ export interface MessageByKind {
   ble: BleMessage
   spectrum: SpectrumMessage
   status: StatusMessage
+  /** Published by the laptop's detector (server/detector.py), not by the unit. */
+  detection: Detection
 }
 
 export type Kind = keyof MessageByKind
@@ -56,6 +61,7 @@ export const FIELDS: { readonly [K in Kind]: readonly (keyof MessageByKind[K] & 
   ble: ["ts", "node", "readings"],
   spectrum: ["ts", "node", "sweeps", "hits"],
   status: ["ts", "node", "uptime_s", "wifi_rssi", "fw"],
+  detection: ["ts", "node", "addr", "type", "type_conf", "band", "band_conf", "rssi"],
 }
 
 export const KINDS = Object.keys(FIELDS) as Kind[]
@@ -154,6 +160,26 @@ function readingProblem(reading: unknown): string | null {
   return null
 }
 
+function isUnitInterval(value: unknown): boolean {
+  return typeof value === "number" && value >= 0 && value <= 1
+}
+
+/** The checks for a detection's own fields, after ts and node. Mirrors server/contract.py. */
+export function detectionFieldProblem(p: Record<string, unknown>): string | null {
+  if (p.addr !== null && (typeof p.addr !== "string" || !ADDR_RE.test(p.addr))) {
+    return "addr must be null or a hashed address: 12 lowercase hex chars"
+  }
+  if (!(DEVICE_TYPES as readonly unknown[]).includes(p.type)) return `type must be one of ${DEVICE_TYPES.join(", ")}`
+  if (!(BANDS as readonly unknown[]).includes(p.band)) return `band must be one of ${BANDS.join(", ")}`
+  if (!isUnitInterval(p.type_conf)) return "type_conf must be a number from 0 to 1"
+  if (!isUnitInterval(p.band_conf)) return "band_conf must be a number from 0 to 1"
+  if (p.rssi !== null) {
+    const rssiError = checkInt(p, "rssi", -127, 0)
+    if (rssiError) return rssiError
+  }
+  return null
+}
+
 /** Check a decoded JSON payload against the contract. */
 export function validate<K extends Kind>(
   kind: K,
@@ -202,6 +228,9 @@ export function validate<K extends Kind>(
         return fail("each hit count must be an integer from 0 to sweeps")
       }
     }
+  } else if (kind === "detection") {
+    const problem = detectionFieldProblem(p)
+    if (problem) return fail(problem)
   } else {
     const uptimeError = checkInt(p, "uptime_s", 0, 2 ** 31 - 1)
     if (uptimeError) return fail(uptimeError)

@@ -18,5 +18,5 @@ export const HALL = {
   ],
 } as const
 
-/** Where a band's devices are drawn: the middle of the band, in metres from the unit. */
-export const BAND_DRAW_RADIUS_M: Record<Band, number> = { near: 0.62, mid: 1.5, far: 2.8 }
+/** Where a band's devices are drawn, in metres from the unit. */
+export const BAND_DRAW_RADIUS_M: Record<Band, number> = { near: 0.62, not_near: 2.2 }

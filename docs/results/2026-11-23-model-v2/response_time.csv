@@ -1,0 +1,25 @@
+device,distance_m,first_heard_to_laptop_s,first_alert_s,first_right_type_s,first_right_type_and_band_s
+earpiece B class,0.5,-0.12,1.9,1.9,1.9
+earpiece B class,1.0,0.22,2.2,2.2,2.2
+earpiece B class,1.5,-0.08,0.9,0.9,0.9
+earpiece B class,2.0,-0.38,1.6,1.6,4.6
+earpiece B class,2.5,-0.15,0.8,0.8,0.8
+earpiece B class,3.0,0.17,2.2,2.2,3.2
+earpiece B class,3.5,0.18,2.2,2.2,3.2
+phone B,0.5,0.97,2.0,2.0,2.0
+phone B,1.0,0.89,1.9,1.9,
+phone B,1.5,0.8,1.8,1.8,1.8
+phone B,2.0,0.74,7.7,7.7,7.7
+phone B,2.5,0.75,5.7,5.7,5.7
+phone B,3.0,0.9,1.9,1.9,1.9
+phone B,3.5,0.9,5.9,5.9,5.9
+phone B class,0.5,0.27,1.2,1.2,1.2
+phone B class,1.0,0.36,1.4,1.4,3.4
+phone B class,1.5,0.44,7.9,7.9,7.9
+phone C class,0.5,1.98,3.0,3.0,3.0
+phone C class,1.0,0.63,1.6,1.6,1.6
+phone C class,1.5,0.6,,,
+phone C class,2.0,-0.03,,,
+phone C class,2.5,0.12,,,
+phone C class,3.0,-0.24,,,
+phone C class,3.5,3.15,,,

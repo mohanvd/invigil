@@ -1,4 +1,4 @@
-"""Train and evaluate the two Invigil models: device type and distance band.
+"""Train and evaluate the two Invigil models: device type and near / not near.
 
 Run from the repo root:
     python -m ml.train                      # all labeled sessions in data/raw
@@ -29,13 +29,16 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import GroupKFold
 
-from ml.features import BANDS, BANNED, FEATURE_COLS, TYPES, dataset
+from ml.features import BAND_FEATURE_COLS, BANDS, BANNED, FEATURE_COLS, TYPES, dataset
 
 TARGETS = {
     # target: (class order, design requirement it is checked against, pass mark)
     "type": (TYPES, "DR2 classification accuracy", 0.85),
-    "band": (BANDS, "DR3 distance band accuracy", 0.80),
+    "band": (BANDS, "DR3 near / not-near accuracy", 0.80),
 }
+# Features each model sees. The band model leaves out the room-wide spectrum
+# features (see BAND_FEATURE_COLS in ml/features.py).
+TARGET_FEATURES = {"type": FEATURE_COLS, "band": BAND_FEATURE_COLS}
 MAX_FOLDS = 5
 
 
@@ -62,7 +65,8 @@ def folds(groups: pd.Series):
 
 def evaluate(df: pd.DataFrame, target: str) -> dict:
     classes, _, _ = TARGETS[target]
-    X = df[FEATURE_COLS].to_numpy(dtype=float)
+    cols = TARGET_FEATURES[target]
+    X = df[cols].to_numpy(dtype=float)
     y = df[target].to_numpy()
     groups = df["session"]
 
@@ -83,7 +87,8 @@ def evaluate(df: pd.DataFrame, target: str) -> dict:
         "labels": labels,
         "confusion": confusion_matrix(y, pred, labels=labels),
         "report": classification_report(y, pred, labels=labels, zero_division=0),
-        "importance": sorted(zip(FEATURE_COLS, final.feature_importances_), key=lambda p: -p[1]),
+        "features": cols,
+        "importance": sorted(zip(cols, final.feature_importances_), key=lambda p: -p[1]),
         "model": final,
     }
     if target == "type":
@@ -146,7 +151,7 @@ def main(argv: list[str] | None = None) -> None:
         cm = pd.DataFrame(r["confusion"], index=r["labels"], columns=r["labels"])
         cm.to_csv(out / f"confusion_{r['target']}.csv")
         joblib.dump(
-            {"model": r["model"], "features": FEATURE_COLS, "classes": r["labels"]},
+            {"model": r["model"], "features": r["features"], "classes": list(r["model"].classes_)},
             args.models / f"{r['target']}.joblib",
         )
     print(f"report: {out / 'report.md'}")

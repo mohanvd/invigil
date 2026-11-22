@@ -35,8 +35,8 @@ log = logging.getLogger("invigil.fake")
 
 FAKE_FW = "0.3.0-fake"  # shows up in status.csv, so fake runs are easy to spot
 
-# Distance bands from docs/data-protocol.md: (name, upper edge in metres).
-BANDS = (("near", 1.0), ("mid", 2.0), ("far", 3.5))
+# Bands from docs/data-protocol.md: (name, upper edge in metres).
+BANDS = (("near", 1.0), ("not_near", 3.5))
 
 # ---------------------------------------------------------------------------
 # PLACEHOLDERS. None of these are measured yet.
@@ -81,7 +81,7 @@ class Device:
 
 
 def band_of(distance_m: float) -> str:
-    """Distance band for a distance from the unit. An edge belongs to the farther band."""
+    """near or not_near for a distance from the unit. An edge belongs to the farther band."""
     for name, upper in BANDS:
         if distance_m < upper:
             return name
@@ -216,7 +216,7 @@ def run(send: Callable[[str, dict], None], devices: list[Device], scan_ms: int, 
                 n.scan_start = now  # fell behind (laptop was asleep), skip ahead
 
         if now >= next_report:
-            log.info("sent %s in the last 10 s", ", ".join(f"{sent[k]} {k}" for k in contract.KINDS))
+            log.info("sent %s in the last 10 s", ", ".join(f"{sent[k]} {k}" for k in contract.UNIT_KINDS))
             sent.clear()
             next_report += 10_000
 

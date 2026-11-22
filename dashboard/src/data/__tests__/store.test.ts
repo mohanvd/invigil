@@ -8,6 +8,7 @@ import {
   isUnitOnline,
   mapDevices,
   messagesPerSecond,
+  nearDevices,
   percentile,
   visibleAlerts,
 } from "../selectors"
@@ -31,7 +32,7 @@ function detection(overrides: Partial<Detection> = {}): Detection {
     addr: "a91f03c2d4e8",
     type: "phone",
     type_conf: 0.9,
-    band: "mid",
+    band: "not_near",
     band_conf: 0.8,
     rssi: -60,
     ...overrides,
@@ -225,13 +226,13 @@ describe("selectors", () => {
   it("filters alerts and hides whitelisted devices", () => {
     const store = makeStore()
     store.detection(detection(), T0)
-    store.detection(detection({ addr: "0123456789ab", type: "smartwatch", band: "far", ts: T0 + 1000 }), T0 + 1000)
+    store.detection(detection({ addr: "0123456789ab", type: "smartwatch", band: "near", ts: T0 + 1000 }), T0 + 1000)
     const { alerts } = store.getSnapshot()
     const all = { type: "all", band: "all" } as const
 
     expect(visibleAlerts(alerts, [], all).map((a) => a.id)).toEqual(["0123456789ab", "a91f03c2d4e8"])
     expect(visibleAlerts(alerts, [], { type: "phone", band: "all" })).toHaveLength(1)
-    expect(visibleAlerts(alerts, [], { type: "all", band: "far" })).toHaveLength(1)
+    expect(visibleAlerts(alerts, [], { type: "all", band: "near" })).toHaveLength(1)
     expect(visibleAlerts(alerts, [{ addr: "a91f03c2d4e8", label: "Proctor phone" }], all)).toHaveLength(1)
     expect(alertLatencyP50(alerts)).toBe(0)
   })
@@ -242,7 +243,32 @@ describe("selectors", () => {
     store.detection(detection({ addr: "0123456789ab", ts: T0 - 60_000 }), T0)
     const devices = mapDevices(store.getSnapshot(), [{ addr: "a91f03c2d4e8", label: "Proctor phone" }], T0 + 1000)
     expect(devices).toEqual([
-      { key: "a91f03c2d4e8", addr: "a91f03c2d4e8", type: "allowed", band: "mid", label: "Proctor phone" },
+      { key: "a91f03c2d4e8", addr: "a91f03c2d4e8", type: "allowed", band: "not_near", label: "Proctor phone" },
     ])
+  })
+
+  it("takes detections from the detection topic", () => {
+    const store = makeStore()
+    store.message("invigil/node/N1/detection", JSON.stringify(detection({ band: "near" })), T0 + 300)
+    const state = store.getSnapshot()
+    expect(state.counts.detection).toBe(1)
+    expect(state.alerts).toHaveLength(1)
+    expect(state.alerts[0]).toMatchObject({ type: "phone", band: "near", latencyMs: 300 })
+
+    store.message("invigil/node/N1/detection", JSON.stringify(detection({ band: "mid" as never })), T0)
+    expect(store.getSnapshot().rejected.count).toBe(1)
+  })
+
+  it("names banned devices within 1 m for the search banner, strongest first", () => {
+    const store = makeStore()
+    store.detection(detection({ band: "near", rssi: -65 }), T0)
+    store.detection(detection({ addr: "0123456789ab", type: "earpiece", band: "near", rssi: -55 }), T0)
+    store.detection(detection({ addr: "bbbbbbbbbbbb", type: "allowed", band: "near" }), T0)
+    store.detection(detection({ addr: "cccccccccccc", band: "not_near" }), T0)
+    const state = store.getSnapshot()
+
+    expect(nearDevices(state, [], T0 + 1000).map((d) => d.type)).toEqual(["earpiece", "phone"])
+    expect(nearDevices(state, [{ addr: "0123456789ab", label: "Proctor" }], T0 + 1000)).toHaveLength(1)
+    expect(nearDevices(state, [], T0 + 10_000)).toEqual([])
   })
 })

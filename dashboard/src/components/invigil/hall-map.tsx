@@ -6,7 +6,7 @@ import type { MapDevice } from "@/data/selectors"
 import { BANDS, BAND_EDGES_M } from "@/data/types"
 import type { Band } from "@/data/types"
 
-import { BAND_RANGE, BAND_STYLE, DEVICE_LABEL } from "./bands"
+import { BAND_LABEL, BAND_RANGE, BAND_STYLE, DEVICE_LABEL } from "./bands"
 import { DeviceIcon } from "./icons"
 
 const PX_PER_M = 100
@@ -25,8 +25,7 @@ const ARC_TO_DEG = 152
 // Where each zone's label sits, in metres from the unit, clear of the seats.
 const LABEL_AT: Record<Band, { x: number; y: number }> = {
   near: { x: -0.52, y: 0.3 },
-  mid: { x: -1.45, y: 0.4 },
-  far: { x: 0, y: 3.2 },
+  not_near: { x: 0, y: 3.2 },
 }
 
 function arcPoint(radiusM: number, angleDeg: number): { x: number; y: number } {
@@ -53,13 +52,13 @@ interface HallMapProps {
 }
 
 /**
- * The hall from above: the unit on the front wall, the three distance bands
- * as soft tints, the six seats, and each detected device in its band.
+ * The hall from above: the unit on the front wall, the near zone (under 1 m)
+ * as a soft tint, the six seats, and each detected device in its zone.
  */
 export function HallMap({ devices, selectedKey, onSelect }: HallMapProps) {
   const clipId = useId()
   const placed = placeDevices(devices)
-  const zones: Band[] = ["far", "mid", "near"]
+  const zones: Band[] = ["not_near", "near"]
 
   return (
     <svg
@@ -101,7 +100,7 @@ export function HallMap({ devices, selectedKey, onSelect }: HallMapProps) {
         const y = TOP + p.y * PX_PER_M
         return (
           <text key={band} x={x} y={y} textAnchor="middle" className="fill-foreground font-mono text-[11px] font-medium tracking-[0.08em] uppercase">
-            {band}
+            {BAND_LABEL[band]}
             <tspan x={x} dy="13" className="fill-muted-foreground tracking-normal normal-case">
               {BAND_RANGE[band]}
             </tspan>
@@ -145,12 +144,12 @@ export function HallMap({ devices, selectedKey, onSelect }: HallMapProps) {
             role="button"
             tabIndex={0}
             aria-pressed={selected}
-            aria-label={`${name}, ${device.band} band`}
+            aria-label={`${name}, ${BAND_LABEL[device.band]}`}
             onClick={select}
             onKeyDown={onKeyDown}
             className="cursor-pointer"
           >
-            <title>{`${name}, ${device.band} band`}</title>
+            <title>{`${name}, ${BAND_LABEL[device.band]}`}</title>
             <circle
               cx={x}
               cy={y}

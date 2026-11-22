@@ -7,7 +7,7 @@ import { BANDS, BAND_EDGES_M } from "@/data/types"
 import type { Band, RssiByDistancePoint, RssiReading } from "@/data/types"
 import { formatClock } from "@/lib/format"
 
-import { BAND_STYLE, DEVICE_LABEL } from "./bands"
+import { BAND_LABEL, BAND_STYLE, DEVICE_LABEL } from "./bands"
 
 // Gridlines are line, axes are line-strong, tick labels are ink-muted in mono.
 const AXIS = { stroke: "var(--input)" }
@@ -90,13 +90,12 @@ export function RssiTimeChart({ readings, from, to }: { readings: RssiReading[];
 
 const distanceConfig = {
   near: { label: "Near", color: "var(--near)" },
-  mid: { label: "Mid", color: "var(--mid)" },
-  far: { label: "Far", color: "var(--far)" },
+  not_near: { label: "Not near", color: "var(--far)" },
 } satisfies ChartConfig
 
-const BAND_FROM_M: Record<Band, number> = { near: 0, mid: BAND_EDGES_M.near, far: BAND_EDGES_M.mid }
+const BAND_FROM_M: Record<Band, number> = { near: 0, not_near: BAND_EDGES_M.near }
 
-/** Median RSSI of each session against its distance, with the three bands shaded behind. */
+/** Median RSSI of each session against its distance, with near and not near shaded behind. */
 export function RssiDistanceChart({ points }: { points: RssiByDistancePoint[] }) {
   return (
     <ChartContainer config={distanceConfig} className="aspect-auto h-72 w-full">
@@ -110,7 +109,7 @@ export function RssiDistanceChart({ points }: { points: RssiByDistancePoint[] })
             fillOpacity={1}
             stroke="none"
             label={{
-              value: band.toUpperCase(),
+              value: BAND_LABEL[band].toUpperCase(),
               position: "insideTop",
               offset: 8,
               style: { ...TICK, fill: "var(--foreground)", fontWeight: 500, letterSpacing: "0.08em" },
@@ -121,7 +120,7 @@ export function RssiDistanceChart({ points }: { points: RssiByDistancePoint[] })
         <XAxis
           dataKey="distanceM"
           type="number"
-          domain={[0, BAND_EDGES_M.far]}
+          domain={[0, BAND_EDGES_M.not_near]}
           ticks={[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]}
           tick={TICK}
           axisLine={AXIS}

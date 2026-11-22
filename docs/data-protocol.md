@@ -1,6 +1,6 @@
 # Data collection protocol
 
-How to record the dataset for the two models: device type and distance band.
+How to record the dataset for the two models: device type and near / not near.
 Follow it exactly. How the data is recorded decides whether the accuracy
 number means anything.
 
@@ -32,16 +32,17 @@ Device type (one per test device):
 | `smartwatch` | smartwatch or fitness band |
 | `allowed` | a device permitted in the hall (see open decision 1) |
 
-Distance band, measured with a tape from the unit to the device:
+Near or not near, measured with a tape from the unit to the device:
 
 | Band | Distance | Record at |
 |---|---|---|
 | `near` | under 1 m | 0.5 m |
-| `mid` | 1 to 2 m | 1.5 m |
-| `far` | 2 to 3.5 m | 3.0 m |
+| `not_near` | 1 m or more | 1.5 m and 3.0 m |
 
-These band edges are a starting point. Adjust them after calibration shows
-where RSSI actually separates.
+There used to be three bands (near, mid 1 to 2 m, far 2 to 3.5 m).
+Calibration on 2026-11-22 showed that RSSI from one unit cannot tell 1.5 m
+from 3.5 m indoors, so mid and far were merged into `not_near`. Older
+`session.json` files that say `mid` or `far` are read as `not_near`.
 
 ## Device states and positions
 

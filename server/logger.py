@@ -39,6 +39,8 @@ COLUMNS = {
     "spectrum": ["rx_ts", "ts", "node", "sweeps"]
     + [f"ch{c:03d}" for c in range(contract.NUM_CHANNELS)],
     "status": ["rx_ts", *contract.FIELDS["status"]],
+    # From the laptop's detector. rx_ts - ts is the alert latency at the laptop.
+    "detection": ["rx_ts", *contract.FIELDS["detection"]],
 }
 
 

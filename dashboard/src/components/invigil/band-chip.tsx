@@ -3,9 +3,9 @@ import type { ComponentProps } from "react"
 import type { Band } from "@/data/types"
 import { cn } from "@/lib/utils"
 
-import { BAND_STYLE } from "./bands"
+import { BAND_LABEL, BAND_STYLE } from "./bands"
 
-/** A distance band: its color and always its word, so it reads in grayscale too. */
+/** Near or not near: its color and always its words, so it reads in grayscale too. */
 export function BandChip({ band, className, ...props }: ComponentProps<"span"> & { band: Band }) {
   const style = BAND_STYLE[band]
   return (
@@ -18,7 +18,7 @@ export function BandChip({ band, className, ...props }: ComponentProps<"span"> &
       {...props}
     >
       <span className={cn("size-2 rounded-full", style.mark)} aria-hidden="true" />
-      {band}
+      {BAND_LABEL[band]}
     </span>
   )
 }

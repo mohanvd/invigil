@@ -30,6 +30,7 @@ Color means signal strength, and signal strength means distance. The three heat 
 | Far | 2 to 3.5 m (weakest signal) | `far` |
 
 - Use `near`, `mid` and `far` only to mean a distance band: an alert's band, a ring on the hall map, a bar in an RSSI chart. Never as decoration, never for a heading, never for device types.
+- The models now answer only near (under 1 m) or not near. The dashboard draws `not_near` with the `far` color and leaves `mid` unused. The three colors stay for RSSI-against-distance figures.
 - Always put the band's word next to its color (BandChip does). The poster may be printed in grayscale and some judges may be color blind.
 - Red is not "error" here. A failed test or a broken unit uses words and icons on neutrals, never `near`.
 - The picture behind it all is the hall seen from above: the unit on the front wall, the bands spreading into the room. The logo, SignalRings, the badge and the poster figures all draw that same picture.
@@ -38,7 +39,7 @@ Color means signal strength, and signal strength means distance. The three heat 
 
 - Write in English, plainly, for a professional reader: judges, teachers, an engineer. Short sentences, active voice.
 - No em dashes. Use a comma, a colon or a new sentence.
-- Name things the way the project does: "the unit" (not node or sensor box), "device type", "distance band", "near / mid / far". In running text the bands are lowercase; in labels they are UPPERCASE (`label` style).
+- Name things the way the project does: "the unit" (not node or sensor box), "device type", "near / not near". In running text the bands are lowercase; in labels they are UPPERCASE (`label` style).
 - Every number carries its unit, with a space: `-58 dBm`, `1.4 s`, `3 m`, `85%` is the exception.
 - Addresses appear only as 12-character hashes in mono (`a91f03c2d4e8`). Never a raw MAC, in any document.
 - Name the tagline exactly: "Every signal leaves a trace." Sentence case, with the full stop. Use it once per surface at most (poster footer, badge, title slide).
