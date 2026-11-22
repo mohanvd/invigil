@@ -1,0 +1,101 @@
+Windows per device and distance (5 s windows, 1 s step)
+dist              0.5  1.0  1.5  2.0  2.5  3.0  3.5
+device                                             
+earpiece B class   55   55   55   54   54   55   52
+phone B            55   55   55   54   55   55   56
+phone B class      55   54   55    0    0    0    0
+phone C class      55   55   53   53   55    7   49
+
+== Band, three classes ==
+all features             leave one session out  accuracy  62.9%   balanced  60.8%
+all features             leave one device out   accuracy  62.6%   balanced  63.6%
+BLE only (no spectrum)   leave one session out  accuracy  44.3%   balanced  46.9%
+BLE only (no spectrum)   leave one device out   accuracy  53.3%   balanced  55.7%
+spectrum only            leave one session out  accuracy  42.8%   balanced  35.8%
+spectrum only            leave one device out   accuracy  45.2%   balanced  42.9%
+
+== Band without the 1.0 m and 2.0 m sessions (they sit on band edges) ==
+all features: accuracy  71.1%   balanced  67.7%
+predicted  far  mid  near
+true                     
+far        355   82     1
+mid        156   61     1
+near         8    5   207
+
+BLE only (no spectrum): accuracy  53.4%   balanced  52.0%
+predicted  far  mid  near
+true                     
+far        251  186     1
+mid        208    9     1
+near         4    8   208
+
+== Mid vs far only (chance is 50% balanced) ==
+all features             leave one session out  accuracy  70.0%   balanced  70.1%
+all features             leave one device out   accuracy  62.4%   balanced  55.9%
+BLE only (no spectrum)   leave one session out  accuracy  48.7%   balanced  48.9%
+BLE only (no spectrum)   leave one device out   accuracy  55.9%   balanced  53.7%
+
+Mid vs far, BLE only, leave one session out: windows predicted per session
+predicted              far  mid
+device           dist          
+earpiece B class 1.0     7   48
+                 1.5    18   37
+                 2.0    52    2
+                 2.5    39   15
+                 3.0    30   25
+                 3.5    49    3
+phone B          1.0     0   55
+                 1.5    33   22
+                 2.0    41   13
+                 2.5    17   38
+                 3.0    22   33
+                 3.5    14   42
+phone B class    1.0    14   40
+                 1.5    52    3
+phone C class    1.0     0   55
+                 1.5    44    9
+                 2.0    52    1
+                 2.5     8   47
+                 3.0     0    7
+                 3.5    41    8
+
+Mid vs far, BLE only, one model per device (leave one session out)
+earpiece B class: accuracy  60.0%   balanced  60.0%  (6 sessions)
+phone B: accuracy  57.6%   balanced  57.6%  (6 sessions)
+phone B class: only one band recorded, skipped
+phone C class: accuracy  48.9%   balanced  48.7%  (6 sessions)
+
+== Spectrum by session, in recording order ==
+The nRF24 sees the whole room. If these move with the clock and not with distance,
+the spectrum features describe the room's Wi-Fi traffic, not the test device.
+    minute            device  dist  spec_active  spec_mean_frac  rssi_median
+0        0           phone B 0.500       68.000           0.051      -63.500
+1        5           phone B 1.000       77.000           0.064      -67.000
+2        6           phone B 1.500       72.000           0.052      -78.000
+3        9           phone B 2.000       75.000           0.056      -78.000
+4       10           phone B 2.500       75.000           0.067      -77.500
+5       11           phone B 3.000       75.000           0.068      -79.000
+6       13           phone B 3.500       76.000           0.073      -79.000
+7       95     phone B class 0.500       31.000           0.017      -62.000
+8       97     phone B class 1.000       31.000           0.017      -74.000
+9       98     phone B class 1.500       32.000           0.016      -86.000
+10     120     phone C class 0.500       36.000           0.019      -65.000
+11     122     phone C class 1.000       36.000           0.020      -78.000
+12     124     phone C class 1.500       32.000           0.016      -95.000
+13     125     phone C class 2.000       31.000           0.016      -95.000
+14     127     phone C class 2.500       33.000           0.017      -98.000
+15     128     phone C class 3.000       36.000           0.022      -92.000
+16     130     phone C class 3.500       36.000           0.020      -99.000
+17     194  earpiece B class 0.500       38.000           0.021      -64.000
+18     196  earpiece B class 1.000       32.000           0.018      -73.500
+19     198  earpiece B class 1.500       28.000           0.017      -85.000
+20     199  earpiece B class 2.000       29.000           0.017      -78.000
+21     202  earpiece B class 2.500       51.500           0.035      -82.750
+22     203  earpiece B class 3.000       45.000           0.061      -77.500
+23     204  earpiece B class 3.500       45.000           0.022      -80.000
+
+== Type (phone vs earpiece) ==
+all features               leave one session out  accuracy 100.0%   balanced 100.0%
+no manufacturer columns    leave one session out  accuracy  97.9%   balanced  97.3%
+BLE timing and RSSI only   leave one session out  accuracy  96.9%   balanced  96.4%
+Leave one device out is not possible for type: there is only one earpiece.

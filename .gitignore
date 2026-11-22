@@ -36,3 +36,6 @@ desktop.ini
 
 # Templates are always committed, even if a rule above matches them.
 !*.example
+
+# Trained models, rebuilt by ml/train.py from data/raw.
+ml/models/
