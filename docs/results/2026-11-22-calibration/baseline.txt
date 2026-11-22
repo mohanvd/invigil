@@ -1,0 +1,8 @@
+Baseline: 2026-11-22-live-113837, 11:45 to 11:48 local time (UTC+2), empty room
+BLE readings: 1819 (10.1/s), devices: 17
+Strongest device median: -86 dBm; devices with median above -80 dBm: 0
+All readings: median -88 dBm, 99th percentile -70 dBm, max -68 dBm
+Readings by manufacturer: 0x0006 1584, none 134, 0x0942 83, 0x0CCB 16, 0x079A 1, 0x0075 1
+Devices by median (no addresses): -86 dBm/718 adv/0x0006, -87 dBm/471 adv/0x0006, -88 dBm/24 adv/none, -89 dBm/1 adv/none, -91 dBm/83 adv/0x0942, -94 dBm/33 adv/none, -95 dBm/2 adv/0x0006, -96 dBm/39 adv/none, -96 dBm/16 adv/0x0CCB, -96 dBm/37 adv/none, -97 dBm/373 adv/0x0006, -98 dBm/1 adv/0x0075, -100 dBm/1 adv/0x079A, -100 dBm/6 adv/0x0006, -102 dBm/9 adv/0x0006, -102 dBm/1 adv/0x0006, -104 dBm/4 adv/0x0006
+Spectrum messages: 162, sweeps per message (median): 43
+Channels active in >= 2% of sweeps: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 47, 48, 49, 50, 51, 52, 53, 54, 55]
